@@ -1,7 +1,7 @@
 """FX3 (ILME-FX3) firmware 7.02: apply, or put back, the open-gate state in the camera's MEMORY.
 
-  python fx3_apply.py apply    [--no-screen] [--dry-run]
-  python fx3_apply.py putback  [--no-screen] [--dry-run]
+  python fx3_apply.py apply    [--no-screen] [--no-si] [--no-meta] [--dry-run]
+  python fx3_apply.py putback  [--no-screen] [--no-si] [--dry-run]
   python fx3_apply.py screen | screen-putback  [--dry-run]
   python fx3_apply.py playback | playback-putback  [--dry-run]      (optional, NOT RUN ON ANY CAMERA: in-camera playback)
   (apply and screen take --no-movie-session to leave out the closing read-only session)
@@ -13,11 +13,14 @@ THE FIRST KIT RAN ON AN FX3 (2026-11-24): open gate recorded (XAVC HS 4K and XAV
 in-camera playback of those clips failed and once froze the camera. Since 2026-11-25 step L19 also makes the MP4 headers say 3840x2560
 (ogfile2560_hs_s_fx3_v2, the A7 IV's working header fix); --no-meta keeps the first kit's encoder step (N19). Not run yet.
 
-  apply    four steps, each its own USB session: L5 sensor side (ogsq_fx3_v1), L16 output size (outsz2560_fx3_v1),
+  apply    five steps, each its own USB session: L5 sensor side (ogsq_fx3_v1), L16 output size (outsz2560_fx3_v1),
            L19 encoder side (ogfile2560_hs_s_fx3_v2), S16 rear screen at 3:2 with the focus frames and the camera's own
-           De-Squeeze Display set for the 3:2 picture (lcd32dsq_fx3_v1). Afterwards: XAVC HS 4K or XAVC S 4K at 23.98p only.
-           With --no-screen only the first three. A step that finds its bytes already applied says NOTHING TO DO and counts as passed.
-  putback  the reverse: S17, L20, L17, L6 (with --no-screen the last three). A cold boot (battery out for 10 seconds) also undoes everything.
+           De-Squeeze Display set for the 3:2 picture (lcd32dsq_fx3_v1), and I19 XAVC S-I 4K (ogfilesi2560_fx3_v1, 2026-11-25, NOT RUN
+           YET: the A7 IV's S-I step at the FX3's tables). Afterwards XAVC HS 4K, XAVC S 4K and XAVC S-I 4K at 23.98p all record 3840x2560,
+           so the format can be changed in the menu without a new apply. --no-screen leaves out S16, --no-si leaves out I19.
+           A step that finds its bytes already applied says NOTHING TO DO and counts as passed.
+  putback  the reverse: I20, S17, L20, L17, L6 (--no-screen / --no-si leave out theirs). A cold boot (battery out for 10 seconds) also
+           undoes everything.
   screen / screen-putback   only the screen step (S16) or its put back (S17).
   playback / playback-putback   only the playback step (P29) or its put back (P30), 2026-11-25, NOT RUN ON ANY CAMERA. FX3 7.02 opens
            every playback decoder at 4096x2160, so a 3840x2560 clip does not play ("Unable to display"). P29 makes it open the A7 IV's
@@ -61,7 +64,7 @@ STEPS = {"apply": ("L5", "L16", "L19"), "putback": ("L20", "L17", "L6"), "screen
 RUNNER = HERE / "fx3_run.py"
 LISTER = HERE.parent / "CT1_usb_first_contact" / "ct1_stage2_service.py"
 STILL = "a still-image mode (press MODE, choose Program Auto, Aperture Priority, Shutter Priority or Manual Exposure with the control wheel, press its centre)"
-MOVIE = "Movie (press MODE, choose Movie with the control wheel, press its centre; File Format XAVC HS 4K or XAVC S 4K, 24p)"
+MOVIE = "Movie (press MODE, choose Movie with the control wheel, press its centre; File Format XAVC HS 4K, XAVC S 4K or XAVC S-I 4K, 24p)"
 
 
 def say(text=""):
@@ -195,13 +198,14 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("what", choices=sorted(STEPS))
     ap.add_argument("--dry-run", action="store_true", help="show the steps and what each would send; nothing is sent")
-    ap.add_argument("--no-screen", action="store_true", help="with apply or putback: only the three open-gate steps, without the screen step")
+    ap.add_argument("--no-screen", action="store_true", help="with apply or putback: without the screen step (S16 / S17)")
+    ap.add_argument("--no-si", action="store_true", help="with apply or putback: without the XAVC S-I 4K step (I19 / I20)")
     ap.add_argument("--no-movie-session", action="store_true", help="with apply or screen: leave out the closing read-only session in movie mode")
     ap.add_argument("--no-meta", action="store_true", help="with apply: the first kit's encoder step (N19), whose MP4 headers keep saying 3840x2160")
     a = ap.parse_args()
     steps = STEPS[a.what]
-    if a.no_screen and a.what not in ("apply", "putback"):
-        raise SystemExit("--no-screen goes with apply or putback. Nothing was sent.")
+    if (a.no_screen or a.no_si) and a.what not in ("apply", "putback"):
+        raise SystemExit("--no-screen and --no-si go with apply or putback. Nothing was sent.")
     if a.no_meta and a.what != "apply":
         raise SystemExit("--no-meta goes with apply (the put back L20 puts back either encoder step). Nothing was sent.")
     if a.no_meta:
@@ -209,6 +213,9 @@ def main():
     with_screen = not a.no_screen
     if a.what in ("apply", "putback") and with_screen:
         steps = steps + STEPS["screen"] if a.what == "apply" else STEPS["screen-putback"] + steps
+    with_si = not a.no_si                             # XAVC S-I 4K: last on apply (a refusal there leaves the other steps applied), first on put back
+    if a.what in ("apply", "putback") and with_si:
+        steps = steps + ("I19",) if a.what == "apply" else ("I20",) + steps
     applying = a.what in ("apply", "screen", "playback")
     closing = a.what in ("apply", "screen")           # the closing read-only session in Movie: only after the open-gate or screen steps
     for k in steps:                                  # every library must be the pinned one before anything starts
@@ -287,10 +294,14 @@ def main():
         else:
             say("The files' MP4 headers (tkhd, stsd, Sony's PROF) now say 3840x2560: editors should open them at 3:2 without a remux.")
             say("  Sony's XML (in the file and the sidecar) still says 3840x2160, 16:9.")
+        if with_si:
+            say("XAVC S-I 4K (new, not run yet): at 24p it should now record 3840x2560 too, at the menu's 240M (the same bits for a bigger")
+            say("  picture). Set Proxy Recording Off; use a fast card (V90 SD or CFexpress). Do not choose S-I 30p or 60p while it is applied: they")
+            say("  will not record. Please report the S-I clip's size, codec and bit rate (MediaInfo), and a control clip in XAVC HS 4K.")
         say("DO NOT PLAY CLIPS BACK ON THE CAMERA while it is applied: on two FX3s an open-gate clip showed 'unable to display', and")
         say("  a second try froze the camera until the battery was pulled. Check the clips on a computer. (The optional, untested")
         say("  playback step is meant to fix this: fx3_apply.py playback / playback_fix_apply.)")
-    if with_screen and applying:
+    if with_screen and a.what in ("apply", "screen"):
         say("The screen step: in Movie the rear screen should now show the whole picture at 3:2. On a 4:3 screen (what the FX3's")
         say("  1.44M-dot panel is expected to be) there are thin black bars above and below; on a 3:2 screen it fills it. A circle should look round.")
         say("  De-Squeeze Display (MENU > Setup > Display Option > De-Squeeze Display) now de-squeezes the 3:2 picture:")
@@ -314,7 +325,8 @@ def main():
         else:
             movie_session()
         say()
-        say("Use only XAVC HS 4K or XAVC S 4K at 24p (23.98p) while it is applied: on the A7S III 60p distorted the picture and crashed the camera.")
+        say("Use only XAVC HS 4K, XAVC S 4K%s at 24p (23.98p) while it is applied: on the A7S III 60p distorted the picture and crashed the camera."
+            % ("" if a.what != "apply" or not with_si else " or XAVC S-I 4K"))
         say("If the camera stops or restarts: do NOT pull the battery yet. Choose a still mode, replug USB and run dump_info, then send camera_private.")
         say("To return to stock: battery out for 10 seconds.")
 

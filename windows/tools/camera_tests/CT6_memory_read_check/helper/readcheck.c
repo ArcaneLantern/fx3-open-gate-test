@@ -106,8 +106,8 @@
 #ifndef LEVEL
 #define LEVEL 1
 #endif
-#if LEVEL < 1 || LEVEL > 30 || LEVEL == 11
-#error "LEVEL must be 1 to 10, or 12 to 30"
+#if LEVEL < 1 || LEVEL > 31 || LEVEL == 11
+#error "LEVEL must be 1 to 10, or 12 to 31"
 #endif
 #if LEVEL >= 3 && defined(HOST_TEST)
 #error "levels 3 to 8 have no PC build: they call three functions of the camera's libsencore.so (see emu_built.py)"
@@ -137,7 +137,11 @@
 
 #define FILE_CAP   (64 * 1024)             /* at most this much of any one file is copied */
 #define MAPS_CAP   (512 * 1024)            /* except the list of mappings: 64 KB cut it short on the camera (F509) */
+#if LEVEL == 31
+#define TOTAL_CAP  (2 * 1024 * 1024)       /* level 31 only: level 1's part plus at most 1.5 MB of spans (GET_FILE2's first transfer tier is 5 MB) */
+#else
 #define TOTAL_CAP  (1024 * 1024)           /* at most this much is written in all */
+#endif
 #define DIR_ENTRIES_CAP 64
 
 typedef unsigned char u8;
@@ -198,7 +202,7 @@ static i64 sys_write(int fd, const void *b, u64 n) { return sc(NR_write, fd, (i6
 static i64 sys_close(int fd) { return sc(NR_close, fd, 0, 0, 0, 0, 0); }
 static i64 sys_getdents64(int fd, void *b, u64 n) { return sc(NR_getdents64, fd, (i64)b, (i64)n, 0, 0, 0); }
 static i64 sys_geteuid(void) { return sc(NR_geteuid, 0, 0, 0, 0, 0, 0); }
-#if LEVEL == 2 || LEVEL == 3 || (LEVEL >= 7 && LEVEL <= 12) || LEVEL == 15 || LEVEL == 18 || (LEVEL >= 21 && LEVEL <= 28)  /* a level 1 build contains no mapping call at all */
+#if LEVEL == 2 || LEVEL == 3 || (LEVEL >= 7 && LEVEL <= 12) || LEVEL == 15 || LEVEL == 18 || (LEVEL >= 21 && LEVEL <= 28) || LEVEL == 31  /* a level 1 build contains no mapping call at all */
 static i64 sys_mmap_ro(int fd, u64 len, u64 off)
 {
     i64 r = sc(NR_mmap, 0, (i64)len, 1 /* PROT_READ */, 1 /* MAP_SHARED */, fd, (i64)off);
@@ -2882,6 +2886,72 @@ static void level24(void)
 #endif
 #endif
 
+/* ------------------------------------------------------------------ level 31: spans of DRAM (a picture buffer), read-only */
+
+/* After a recording the encoder's per-picture buffers (the codec's 'original0' pictures, in DMM blocks of DRAM) still hold the last
+ * pictures until something else uses that memory. This level copies fixed spans of them out, nothing else: the span table comes from
+ * a design (gen_expected.py --dump <name>, which checks each span against the main processor's DmmCfg). Every span is checked before
+ * anything is read: 64-byte aligned, inside DRAM 0x400000000-0x4ffffffff, at most 256 KB, at most 1.5 MB in all; otherwise nothing is
+ * read. /dev/mem is opened read-only with O_SYNC as levels 22 and 26 open it, so a mapping is uncached (or device memory where the
+ * kernel has no linear map); each span is copied with aligned 64-bit loads into a 4 KB buffer of this file, and only that buffer is
+ * written out, so the kernel never copies from the mapping itself. No codec register, no write mapping, no other file. */
+#if LEVEL == 31
+#ifndef DUMP_H
+#error "level 31 needs -DDUMP_H=\"expected_dump_<name>.h\" (gen_expected.py --dump <name>)"
+#endif
+#include DUMP_H                            /* DUMP_DESIGN, struct dump_span { u64 phys; u32 len; u32 block; const char *what; }, dump_spans[] */
+#define D_SYNC     (0 | 0x101000)          /* O_RDONLY | O_SYNC */
+#define D_DRAM_LO  0x400000000UL
+#define D_DRAM_HI  0x500000000UL
+#define D_SPAN_MAX 0x40000UL               /* 256 KB a span */
+#define D_ALL_MAX  0x180000UL              /* 1.5 MB in all */
+#define D_N (sizeof dump_spans / sizeof dump_spans[0])
+_Static_assert(D_N >= 1 && D_N <= 64, "a short span table");
+
+static u64 d_buf[512];                     /* 4 KB */
+
+static void d_x64(u64 v) { u8 b[8]; for (int i = 0; i < 8; i++) b[i] = (u8)(v >> (8 * (7 - i))); puts_("0x"); puthex(b, 8); }
+
+static void level31(void)
+{
+    puts_("== level 31: spans of DRAM, read-only (" DUMP_DESIGN ")\n");
+    u64 all = 0;
+    for (u64 k = 0; k < D_N; k++) {
+        const struct dump_span *s = &dump_spans[k];
+        if (s->phys < D_DRAM_LO || s->phys >= D_DRAM_HI || s->len > D_DRAM_HI - s->phys || (s->phys & 63) || !s->len || (s->len & 63)
+            || s->len > D_SPAN_MAX) {
+            puts_("!! span "); putnum((i64)k); puts_(" is not a 64-byte aligned piece of DRAM of at most 256 KB; nothing is read\n");
+            puts_("== level 31 verdict: NOTHING READ\n");
+            return;
+        }
+        all += s->len;
+    }
+    if (all > D_ALL_MAX) { puts_("!! the spans add up to more than 1.5 MB; nothing is read\n== level 31 verdict: NOTHING READ\n"); return; }
+    i64 fd = sys_open(TEST_ROOT "/dev/mem", D_SYNC, 0);          /* read-only: this descriptor cannot be mapped for writing */
+    if (fd < 0) { puts_("!! /dev/mem open failed "); putnum(fd); puts_("\n== level 31 verdict: NOTHING READ\n"); return; }
+    u64 got = 0;
+    for (u64 k = 0; k < D_N; k++) {
+        const struct dump_span *s = &dump_spans[k];
+        u64 page = s->phys & ~0xFFFUL, lead = s->phys - page, maplen = (lead + s->len + 0xFFFUL) & ~0xFFFUL;
+        puts_("== span "); putnum((i64)k); puts_(" block "); putnum((i64)s->block); puts_(" "); puts_(s->what); puts_(" phys "); d_x64(s->phys);
+        i64 m = sys_mmap_ro((int)fd, maplen, page);
+        if (m == -1) { puts_("\n!! mmap failed\n"); continue; }
+        puts_(" raw "); putnum((i64)s->len); puts_(" bytes follow\n");
+        for (u64 off = 0; off < s->len; off += sizeof d_buf) {
+            u64 n = s->len - off < sizeof d_buf ? s->len - off : sizeof d_buf;
+            const volatile u64 *src = (const volatile u64 *)(m + (i64)(lead + off));
+            for (u64 w = 0; w < n / 8; w++) d_buf[w] = src[w];
+            put(d_buf, n);
+        }
+        puts_("\n== span end\n");
+        sys_munmap((void *)m, maplen);
+        got++;
+    }
+    sys_close((int)fd);
+    puts_("== level 31 verdict: "); putnum((i64)got); puts_(" of "); putnum((i64)D_N); puts_(" spans read\n");
+}
+#endif
+
 /* ------------------------------------------------------------------ entry */
 
 static void run(void)
@@ -2947,6 +3017,9 @@ static void run(void)
 #endif
 #if LEVEL == 29 || LEVEL == 30
     level29();
+#endif
+#if LEVEL == 31
+    level31();
 #endif
     puts_("== done, bytes written before this line: "); putnum((i64)out_total); puts_("\n");
     if (out_fd >= 0) sys_close(out_fd);

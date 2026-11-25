@@ -97,6 +97,44 @@ The step is optional and separate (`playback_fix_apply.cmd` / `playback_fix_putb
 - data only: row 0's height → 2560 with the 4K memory, which is probably 3–10% too small;
 - no change: keep playback off.
 
+## XAVC S-I 4K: `ogfilesi2560_fx3_v1`, steps I19 / I20 (built 2026-11-25, NOT RUN ON ANY CAMERA)
+
+The A7 IV kit's S-I test step (`ogfilesi2560_v1`, request 70, itself not run yet) ported to the FX3 and made the last step of the default apply, so one run gives XAVC HS 4K, XAVC S 4K and XAVC S-I 4K at 3840 × 2560 (owner, 2026-11-25: one patcher for both, no reset between). `--no-si` / `open_gate_apply_no_si.cmd` leave it out; the put back starts with I20.
+
+**The design** (`build/build_ogfile_si.py --build fx3_702`; the A7 IV designs regenerate byte for byte). Every assert of the A7 IV builder runs on the FX3's own files and passes:
+- libmpr `g_videoParamComb` row 9 (0x2cb1e0; the FX3's rows 0–12 are the A7 IV's) is S-I 4K: AVC, 3840 × 2160, 4:2:2 10-bit, intra. `m_vpcSt` (0x2e0b80) row 9 has the intra flag. Site: the height, 2160 → 2560.
+- av-cam: the reachable S-I 4K descriptors at 23.98p / 25p are the A7 IV's #114 / #117 (24p, classes 14 / 19) and #113 / #116 (25p), keys 105205–105209, UseCore 2, each with a never-reached 205xxx twin. Sony's S-I profile rule (+0x4c = 1.5 × width, +0x56 = half the height in whole macroblock rows) holds for every FX3 S-I profile. Sites: descriptor height +0x80; profile heights +0x06 / +0x38; rows for the first core +0x56, 1072 → 1280.
+- 17 sites, 42 bytes. Level byte (51), bit budget (240M / 250M), the unit-type table, the clip row and the MP4 headers are left alone; L19 already makes the last two right.
+
+**Emulated on the FX3's own code** (`build/emu_ogfilesi_fx3.py` → `evidence/fx3/ogfilesi_fx3_emu.json`, 11 checks). The functions were found by code (`build/avcam_fnport.py`):
+- the matcher (0x225eb8) and the memory function (0x21dd54) are the A7 IV's instruction for instruction;
+- the start-block builder (0x221b50) is a different compile, so it was run as the FX3's own.
+
+What the 11 checks found:
+- **Encoder request.** Comb 9 is 3840 × 2560 with the step; the other combs are as L19 makes them.
+- **MP4 headers.** With L19 v2 an S-I file's headers say 3840 × 2560 with the stock profile id; with `--no-meta` (v1) they say 2160.
+- **Matcher.** It finds each changed descriptor at 3840 × 2560. Every other AVC / HEVC / S-I request (all 689 descriptors' own) answers as before, and L19's descriptors are still found.
+- **Memory.** The memory function asks unit type 4's row (0x486, 0x474, 0x47a, 0x477, then 0x485), exactly what a stock XAVC S 4K 24p recording asks on the FX3. The codec firmware is the same file as the A7 IV's; its own calculation needs CD 44.3 MB of 100.8 MB, LD 0, multi 3.7 of 14.2 MB.
+- **Start block.** The FX3's builder takes each changed profile: crop 3840 × 2560, 1280 rows for the first core; stock gives 1072 at 2160.
+- **Clip code.** 3840 × 2560 gets 23, the FX3's 4K code (from L19).
+- **No overlap.** No site is one of L19's (v1, v2) or the playback step's.
+
+**DmmCfg note.** On the FX3, 0x47a and 0x690/0x691 are alternatives in a 138.7 MB block (key 0x76a; 0x7d6 on the A7 IV), as are 0x486 and 0x664/0x665 in a 100.8 MB block. The 304.7 MB region 0x668 that holds them has one more alternative on the FX3, {0x479}: the stock long-GOP ES block of unit row 3, which L19 replaces with the 4K row.
+
+**Write emulation** (`emu_fx3_write.py`, 12 cases):
+- I19 after L19, again, and after N19: each writes only its sites;
+- L19 run again over both: no write;
+- I20 returns exactly L19's state; L20 leaves the S-I sites;
+- a lost write and a stale kernel view: everything I19 wrote is put back;
+- each of its 6 av-cam guards and its libmpr guard wrong: nothing written.
+
+**Left for the camera:**
+- that XAVC S-I 4K 24p uses sensor mode 0x8c0, as XAVC S/HS 4K 24p do (if not, the picture is 16:9 stretched to 3:2);
+- the image processor's output format in S-I (XAVC S 4:2:2 10-bit records at 3840 × 2560);
+- which bit-rate class the menu's 240M asks (both are changed);
+- the card speed;
+- in-camera playback of an S-I clip (with the playback step).
+
 ## The MP4 headers: `ogfile2560_hs_s_fx3_v2` (2026-11-25, not run yet)
 
 This is the A7 IV kit's header fix (its `ogfile2560_hs_s_v2`, which works on that camera: Resolve opens the files at 3:2 without a remux), ported to the FX3.
@@ -203,18 +241,19 @@ Left stock: the fit words, the 17:9 ratios, and the HDMI manual-layout copy (0x1
   - without the av-cam reservation, av-cam.bin is not read;
   - with an existing result, nothing is done.
   - **And the other way round:** the published A7S III and ZV-E1 check libraries both say NOT READY on an FX3, so neither kit's apply starts on one.
-- **Write emulation** (`emu_fx3_write.py`, 80 cases: 45 for the open-gate and screen steps, and the playback step's 35 from `emu_fx3_playback.py`):
+- **Write emulation** (`emu_fx3_write.py`, 92 cases: 45 for the open-gate and screen steps, 12 for the S-I step, and the playback step's 35 from `emu_fx3_playback.py`):
   - apply, apply again, put back byte for byte;
   - foreign bytes, a lost write undone, a null records pointer, a wrong guard (each of the 32 screen guards);
   - the stored record as the A7S III tester's camera held it, with its run-time bytes left alone (the FX3's stock record is identical).
   - **Safety:** the A7S III kit's own L5, S16 and L19 libraries write nothing on an FX3, even with L5's pointer chain made to reach the FX3's real object.
 - **Scripts.** `fx3_run.py` and `fx3_apply.py` are `s3_run.py` / `s3_apply.py` with this camera's libraries, pins, dump decoder and texts. The FX3 has no mode dial: the texts use its MODE button. Every library's `--selftest` and every launcher's `--dry-run` pass, also from the published tree. The dump decoder reads the panel type, the ratio, the frame rows, the de-squeeze ratios, the crop and the 30 words.
 
-Library pins (2026-11-25): check `6f99aef2`, dump `fdb83bfe` (`fx3read_v2`), L5 `9fd94c17`, L6 `6c8544fb`, L16 `cf644fb3`, L17 `5a3c16bf`, L19 `c028f58c`, L20 `b84dd675`, N19 `47400649` (= the first kit's L19), S16 `bc40334b`, S17 `50a96268`, P29 `c0ccb8c8`, P30 `671de524` (full hashes in `fx3_run.py`). The first kit (run 2026-11-24): check `fcf97a8e`, dump `ad2bae79`, L19 `47400649`, L20 `6ca3ee7d`, header `fx3read_v1`, the other libraries as now. A result belongs to a kit only if its header and each step's manifest name that kit's libraries.
+Library pins (2026-11-25): check `6f99aef2`, dump `fdb83bfe` (`fx3read_v2`), L5 `9fd94c17`, L6 `6c8544fb`, L16 `cf644fb3`, L17 `5a3c16bf`, L19 `c028f58c`, L20 `b84dd675`, N19 `47400649` (= the first kit's L19), S16 `bc40334b`, S17 `50a96268`, P29 `c0ccb8c8`, P30 `671de524`, I19 `740ba559`, I20 `5cc2d1a6` (full hashes in `fx3_run.py`). The first kit (run 2026-11-24): check `fcf97a8e`, dump `ad2bae79`, L19 `47400649`, L20 `6ca3ee7d`, header `fx3read_v1`, the other libraries as now. A result belongs to a kit only if its header and each step's manifest name that kit's libraries.
 
 ## Not known yet
 
 - Whether the v2 headers change anything on the camera beyond the file (they did not on the A7 IV), and whether editors then open the original files at 3:2.
+- **XAVC S-I 4K:** built and emulated, not run (see its section above).
 - **In-camera playback:** the cause is found and the playback step is built and emulated, not run (see "The playback step" above). Until it is tested, testers are told not to play clips back.
 - What made the first apply run unreliable for tester 1. The dumps show no fault, and the camera was started afresh between the two runs.
 - What the A7S III left open: the glitchy live view on entering movie mode from stills, exposure and autofocus, 60p (crashed the A7S III), PAL.

@@ -18,6 +18,8 @@ The two rear-screen libraries (S16/S17 = levels 16/17 with lcd32dsq_fx3_v1's 30 
 de-squeeze ratios and the 2.0x crop) run in the same harness, on the words of the loaded coprocessor image. There is no C19/C20.
 Safety cases: the A7S III kit's own write libraries (helper_s3, levels 5, 16 with its screen words, and 19) run on an FX3 write nothing.
 The playback decoder's two libraries (P29 / P30, readcheck.c levels 29 / 30 with avdec8k_fx3_v1) are run by emu_fx3_playback.py's cases, at the end.
+XAVC S-I 4K (I19 / I20: levels 19 / 20 with ogfilesi2560_fx3_v1): after L19, again, put back, L20 leaving it, on stock, after N19, a lost write,
+a stale view, each guard.
 """
 import json
 import struct
@@ -348,6 +350,54 @@ def main():
             break
     else:
         ok(True, "L19 with any one of the %d instructions around the heights wrong: nothing is written" % len(fl["libmpr_code_guards"][0]["guards"]))
+    # ---- XAVC S-I 4K (2026-11-25): I19 / I20 = levels 19 / 20 with ogfilesi2560_fx3_v1, one more step after L19 in the same apply
+    fs = design("ogfilesi2560_fx3_v1")
+    si = {"av-cam.bin": [], "libmpr.so": []}
+    for q in fs["patches"]:
+        si[q["binary"]].append((int(q["file_off"], 16), bytes.fromhex(q["old"]), bytes.fromhex(q["new"])))
+
+    def with_si(blob, which):
+        b = bytearray(blob)
+        for o, old, new in si[which]:
+            b[o:o + len(new)] = new
+        return bytes(b)
+    ok(not ({o for o, _, _ in si["av-cam.bin"]} & {o for o, _, _ in sites["av-cam.bin"]}) and not ({o for o, _, _ in si["libmpr.so"]} & {o for o, _, _ in sites["libmpr.so"]}),
+       "the S-I step's 17 sites are none of L19's")
+    av2, lm2 = with_si(av1, "av-cam.bin"), with_si(lm1, "libmpr.so")
+    r, t, a, m = mp("I19", av1, lm1)
+    ok(not r.bad and a == av2 and m == lm2 and "DONE" in t, "I19 after L19 (the apply's order): the 16 + 1 S-I sites new, L19's and every other byte as they were")
+    r, t, a, m = mp("I19", av2, lm2)
+    ok(not r.bad and a == av2 and m == lm2 and not r.pwrites and not r.map_writes and "NOTHING TO DO" in t, "I19 again: nothing to do, no write")
+    r, t, a, m = mp(19, av2, lm2)
+    ok(not r.bad and a == av2 and m == lm2 and not r.pwrites and not r.map_writes, "L19 on a camera holding L19 and I19 (an apply run again): no write")
+    r, t, a, m = mp("I20", av2, lm2)
+    ok(not r.bad and a == av1 and m == lm1 and "DONE" in t, "I20 (the put back's first step): the camera holds exactly L19's state again")
+    r, t, a, m = mp(20, av2, lm2)
+    ok(not r.bad and a == with_si(av, "av-cam.bin") and m == with_si(lm0, "libmpr.so") and "DONE" in t,
+       "L20 on a camera holding both: puts back L19's sites only, the S-I sites stay (I20 is their put back)")
+    r, t, a, m = mp("I19", av, lm0)
+    ok(not r.bad and a == with_si(av, "av-cam.bin") and m == with_si(lm0, "libmpr.so") and "DONE" in t, "I19 on a stock camera (without L19): its own sites only")
+    r, t, a, m = mp("I19", av1n, lm1n)
+    ok(not r.bad and a == with_si(av1n, "av-cam.bin") and m == with_si(lm1n, "libmpr.so") and "DONE" in t, "I19 after the first kit's encoder step (N19, --no-meta)")
+    r, t, a, m = mp("I19", av1, lm1, pwrite_lost=[si["libmpr.so"][0][0]])
+    ok(not r.bad and a == av1 and m == lm1 and "NOT DONE: a step failed; every site this run touched was put back" in t, "I19 with its libmpr.so write lost: everything it wrote put back")
+    r, t, a, m = mp("I19", av1, lm1, stale=[si["av-cam.bin"][5][0]])
+    ok(not r.bad and a == av1 and m == lm1 and "NOT DONE" in t, "I19 with the kernel's view not following a write: everything it wrote put back")
+    fsg = [(int(x["descriptor"]) * 0x90 + 0x395108 + 0x28) for x in fs["descriptors"]]
+    for g in fsg + [0x395088, 0x3933AC]:
+        bad_av = bytearray(av1)
+        bad_av[g] ^= 1
+        r, t, a, m = mp("I19", bytes(bad_av), lm1)
+        if r.bad or a != bytes(bad_av) or m != lm1 or r.pwrites or r.map_writes:
+            ok(False, "I19 with the guard at %#x wrong: nothing is written" % g)
+            break
+    else:
+        ok(True, "I19 with any one of its 6 av-cam.bin guards wrong (the 4 profile keys, the 4K unit row, clip row 5): nothing is written")
+    bad_lm = bytearray(lm1)
+    bad_lm[si["libmpr.so"][0][0] - 4] ^= 1
+    r, t, a, m = mp("I19", av1, bytes(bad_lm))
+    ok(not r.bad and a == av1 and m == bytes(bad_lm) and not r.pwrites and not r.map_writes, "I19 with comb row 9's width not 3840: nothing is written")
+
     # ---- rear screen and de-squeeze, coprocessor words inside the loaded image (S16, S17: lcd32dsq_fx3_v1)
     named = lambda n: (HERE / f"libJit_fx3_{n}.so").read_bytes()
     lf = design("lcd32dsq_fx3_v1")

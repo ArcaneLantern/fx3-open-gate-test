@@ -19,6 +19,8 @@ Add --level 2 to any of these for the level 2 build (level 1 plus three read-onl
 or --level 3 for the level 3 build (level 1 plus twelve read-only transfers from coprocessor memory; README.md).
 --level 5 WRITES the test change (14 sites) and --level 6 puts the stock bytes back; a cold boot also undoes it. See README.md and the plan page.
 --level 9 is read-only and touches the main processor only: the first 2 KB of each file in /log and the 256 KB kernel log buffer.
+--level 31 is read-only and touches the main processor only: fixed spans of DRAM named by --design (cddump_si_v1: the encoder's picture
+buffers after an XAVC S-I HD recording), each span saved on its own as span_<n>_<block>_<address>.bin.
 --level 10 is read-only: 64 transfers from coprocessor memory, its kprint log (0xe0000, 128 KB, kept across a restart without power loss)
 and its boot-time log (0xc0000, 128 KB), saved as cp_kprint.bin and cp_boottime.bin in the private session folder.
 --level 12 is read-only: about 90 transfers from coprocessor memory, the state of its memory manager (reference/dmm_memory_manager.md): the page of
@@ -352,6 +354,18 @@ DESIGN_LIBS = {"fhband_v1": {5: ("libJit_level5_fhband_v1.so", "982d2ea9d8916246
                "ogfile57r300m1_v4": {18: ("libJit_level18_ogfile57r300m1_v4.so", "7624199d22ae13ddb0525597aca82adf6810d7af6b58eeff47e1fbfe9b7a6ad7"),
                                      19: ("libJit_level19_ogfile57r300m1_v4.so", "cbd9c4e942676ca29f62acd966ba73750919d416c0641dbe7447c471480296ad"),
                                      20: ("libJit_level20_ogfile57r300m1_v4.so", "45bbfb719cd7e3b1d97be0a9c2d137c0b65721b86725e83f6a8498eb0669a038")},
+               # XAVC S-I 4K in the open-gate states (2026-11-25; build/build_ogfile_si.py; the owner asked for a test script that applies the same open
+               # gate to XAVC S-I 4K). One more level 19 step after the state's step 4; data only, no site shared with it (build/emu_ogfilesi_on_state.py).
+               # ogfilesi2560_v1: libmpr comb row 9 height -> 2560; the four reachable S-I 4K 23.98p/25p descriptors (#113, #114, #116, #117) and
+               # their profiles (+0x06, +0x38, rows for the first core 1072 -> 1280). 17 sites. Not run on a camera.
+               "ogfilesi2560_v1": {18: ("libJit_level18_ogfilesi2560_v1.so", "df97e797b2406138ed091ebaa6077894d11179b82b2a46c657fec926445f8c5f"),
+                                   19: ("libJit_level19_ogfilesi2560_v1.so", "d8bba034c1ecb5e476f839ee0fe362423eefadbf032d4e82187553d11fa6fe49"),
+                                   20: ("libJit_level20_ogfilesi2560_v1.so", "951e40d8a4f176dc430960b7ed71e2008e2cf7b7b3b296e3eb7cb5c762def247")},
+               # ogfilesi57_v1: comb row 9 -> 5760x3840; the same four descriptors' raster; their profiles' rasters, +0x4c 8640, rows for the first
+               # core 1920, Level 6. 25 sites. Not run on a camera.
+               "ogfilesi57_v1": {18: ("libJit_level18_ogfilesi57_v1.so", "9fc7153d68f4631edb1c03256c2b13cc6553d9beff0718fdf92b50f97480be07"),
+                                 19: ("libJit_level19_ogfilesi57_v1.so", "62fa8f86f367255dde5f9924b15b7204dc30233072538d7a43673e047e04b5d9"),
+                                 20: ("libJit_level20_ogfilesi57_v1.so", "d8dd845b2854c5d9b64d0e8371861bb2cdd27a962c52724f6f0a5aa84560f54c")},
                # ogfile69_v1 (2026-11-20; build/build_og57.py --raster 6912 2880): the same 209 sites for a 6912x2880 picture (2.4:1): rows for the
                # first core 1440, +0x4c 10368, Level 6. The codec's own calculation asks less memory than for 5760x3840. Not run on a camera.
                "ogfile69_v1": {18: ("libJit_level18_ogfile69_v1.so", "15bccab5d034cabaf90b153c1e288193456a57a9dc1d01c774dbc323633dcdc3"),
@@ -396,6 +410,29 @@ DESIGN_LIBS = {"fhband_v1": {5: ("libJit_level5_fhband_v1.so", "982d2ea9d8916246
                "ebccd2_v1": {18: ("libJit_level18_ebccd2_v1.so", "438b0447c9a9e856f72214e8eeba975e6aa5f510040b04ed2545400f1e4d6371"),
                              19: ("libJit_level19_ebccd2_v1.so", "a501f123798cf0ad4f588b2f8058399a6852a325805bba9e0b2c1d43c9fabe87"),
                              20: ("libJit_level20_ebccd2_v1.so", "a0f5957c1767df8d904389208b9fd7bba50c2a801f67b528e32f2de6bd3f8ce7")},
+               # ebccd2all_v1 (2026-11-25, F1001/F1002; build/build_bd12.py --design ebccd2all_v1): descriptor +0x87 EbcModeCD := 2 (EBC_10_10x2)
+               # in all 457 descriptors that share a core's CD block (EncCdMode 1; stock 228 x EBC_10_6, 229 x EBC_8_6), after ebccd2_v1's
+               # restart (F1001: codec sharing check 0x80193a68 refuses mixed storage modes, 0x3408). Data only; 459 guards. With vcd12_v3 =
+               # test vcd12_v6b. Not run.
+               # ebccd2land_v1 (2026-11-25, F1003/F1004): ebccd2_v1's 11 descriptor bytes + av-cam data word 0x31d4d0 (landing CD block id for
+               # UseCore 0) 0x470 -> 0x486 (the idle 100.8 MB 4K frame-buffer CD block of the same layout). With vcd12_v3 = test vcd12_v6c. Not run.
+               # ebccd3_v1 (2026-11-25, F1005/F1006): descriptor +0x87 EbcModeCD 4 -> 3 (EBC_10_10x1.5) in ebccd2_v1's 11 descriptors; landing table
+               # stock (need 2,228,224 fits the on-chip 0x470). With vcd12_v3 = test vcd12_v6d. Not run.
+               # ebccd2si_v1 (2026-11-25, F1008; after F1007 and the 'After v6d' notes): descriptor +0x87 EbcModeCD 4 -> 2 (EBC_10_10x2) in the
+               # four XAVC S-I HD 4:2:2 10-bit 23.98p rows 120/139/172/177 (non-landing; need 25,100,288 <= every reachable HD CD block).
+               # With vcd12_v5 = test vcd12_v7. Not run.
+               "ebccd2si_v1": {18: ("libJit_level18_ebccd2si_v1.so", "0f12df1781035d51052ba5f79606628ae55f19067b2a38d9d1febbf21ab56816"),
+                               19: ("libJit_level19_ebccd2si_v1.so", "88ccad8ebe39ea1fbb3a4a1e4c6622142cf649d7d9a6c3e07b12fbcd157335f6"),
+                               20: ("libJit_level20_ebccd2si_v1.so", "836a9851e01c202fc00e6aa98f32f52c4cbcbf63807db632ab68f3b252661873")},
+               "ebccd3_v1": {18: ("libJit_level18_ebccd3_v1.so", "f29e7ac2190dc7bf86e50b5b91816f94064f057f78be8f5f205ca294695c0088"),
+                             19: ("libJit_level19_ebccd3_v1.so", "e18b38f6ec565edfb5c4bca2d4db0bd44c231dd7807974001e1aac0546d3e0a1"),
+                             20: ("libJit_level20_ebccd3_v1.so", "166e1c87a6acc3e7996db68b29dcb30e4974a3b92d6c9c395d3e24e089fbc9ff")},
+               "ebccd2land_v1": {18: ("libJit_level18_ebccd2land_v1.so", "97ba5753b025682c88fd0159f1b696d3472cf5f293c65712d824de338c9f5c04"),
+                                 19: ("libJit_level19_ebccd2land_v1.so", "00ecb9c971eeda2ea89da5230910c89ef523420771bd67252a2b509cf950bb93"),
+                                 20: ("libJit_level20_ebccd2land_v1.so", "b55b07d1b3a834d629918ebb0f547bb97bb5fe41f47512e90c0b19b27cddc61b")},
+               "ebccd2all_v1": {18: ("libJit_level18_ebccd2all_v1.so", "f017b65e73ba78f880dabcbe92afccce73cdc5cf66f879ce778d638784ca29d8"),
+                                19: ("libJit_level19_ebccd2all_v1.so", "4af22140da886fcf57c1382e6eb28628ba9f4d9d6df611ea0ad5a75f0e84c1b8"),
+                                20: ("libJit_level20_ebccd2all_v1.so", "e69b603bffda244213168975f3e88035893a10d6654bdd819304172b1837cdbc")},
                "vcd12_v5": {23: ("libJit_level23_vcd12_v5.so", "5f1b2e20dd20b1108aeb549c555f91d8bbf8b85287c1ab1fe07355875c94e561"),
                             24: ("libJit_level24_vcd12_v5.so", "f7d51092612ae1493762599266ed54c2a67937dd44cbcb6d18e719b35bf61604"),
                             25: ("libJit_level25_vcd12_v5.so", "ba4f5d7b2f5ea91d19cf0c4337a30fca3aff031a119990b1473a980c19a14a82")},
@@ -409,6 +446,12 @@ DESIGN = "og4k_data_v1"
 # the sensor register shadow a fhband_v1 level 8 copies out (0x1033c40, 0x440 bytes): (offset, register, value in mode 16, value in mode 2)
 SHADOW = ((0x3E, "0x01", 16, 2), (0x4E, "0x05", 4, 0), (0x72, "0x0e", 8, 0), (0x7A, "0x10", 41, 0), (0x9E, "0x19", 51, 59))
 # level 27 with hello_v2 (stage V5, modding/VCD_V5_PLAN.md): --level 27 --design hello_v2
+# level 31 (2026-11-25, F1010): read-only copies of DRAM spans, here the encoder's mode-2 picture buffers after an XAVC S-I HD recording
+# with vcd12_v7 (design cddump_si_v1: 30 spans, 1,376,256 bytes, in DMM blocks 0x664/0x486, 0x665, 0x600 and 0x601 at their DmmCfg bases)
+DESIGN_LIBS["cddump_si_v1"] = {31: ("libJit_level31_cddump_si_v1.so", "a8a8208e459e93d1ff4e5cc1b262f042f8f0ad2be29651cd1c4869d3731a06a2")}
+# cddump_si_v2 (2026-11-25, F1012): block 0x664 only (F1011: the S-I stream's CD block): a scan every 512 KB plus 64 KB at the competing
+# picture / chroma starts, to place the chroma plane and pictures 1-2 (50 spans, 1,015,808 bytes)
+DESIGN_LIBS["cddump_si_v2"] = {31: ("libJit_level31_cddump_si_v2.so", "ed85397f1dc7ee3e8d5bf0583589eab6f759bfadd6c06c84906ac6bc600acbe3")}
 DESIGN_LIBS["hello_v6"] = {27: ("libJit_level27_hello_v6.so", "ed813ee9e80b34684cc21dd8ca1e52029c682e191546c20fa04669ae20a1a7bf")}   # the first codec hardware job (V5 step 4c)
 DESIGN_LIBS["hello_v5"] = {27: ("libJit_level27_hello_v5.so", "e5a3f356bb4a10fee48537fb3c9bd95acf1d9dabcf045a4d2b22379a19274f69")}   # a read-only look at the codec block registers (V5 step 3)
 DESIGN_LIBS["hello_v4"] = {27: ("libJit_level27_hello_v4.so", "cef5863220798234df1e5f140930c1443cc360e429bbf003ddff534dc8147d48")}   # the codec CPUs' DRAM bandwidth (V5 step 2)
@@ -596,6 +639,20 @@ def check_result(data):
                            "klog_bytes": len(klog), "klog_sha256": c.sha256(klog), "klog_nonzero": sum(1 for b in klog if b),
                            "klog_problems": [m.decode() for m in re.findall(rb"^!! (?:mmap of the kernel log buffer|/dev/mem open failed).*$", data, re.M)]}
         facts["_klog"] = klog
+    if LEVEL == 31:
+        spans, blobs = [], {}
+        for m in re.finditer(rb"^== span (\d+) block (\d+) (.+?) phys 0x([0-9a-f]{16})( raw (\d+) bytes follow\n)?", data, re.M):
+            k, blk, what, phys = int(m.group(1)), int(m.group(2)), m.group(3).decode("latin1"), int(m.group(4), 16)
+            blob = data[m.end():m.end() + int(m.group(6))] if m.group(5) else b""
+            ok_end = bool(m.group(5)) and data[m.end() + len(blob):m.end() + len(blob) + 13] == b"\n== span end\n"
+            spans.append({"span": k, "block": hex(blk), "what": what, "phys": hex(phys), "bytes": len(blob), "complete": ok_end,
+                          "nonzero_bytes": sum(1 for b in blob if b), "distinct_u16": len(set(blob[i:i + 2] for i in range(0, min(len(blob), 8192), 2))),
+                          "sha256": c.sha256(blob)})
+            if blob:
+                blobs["span_%02d_%x_%x" % (k, blk, phys)] = blob
+        v = re.search(rb"^== level 31 verdict: (.*)$", data, re.M)
+        facts["level31"] = {"spans": spans, "verdict": v.group(1).decode("latin1") if v else None}
+        facts["_spans"] = blobs
     if LEVEL == 10:
         logs = {}
         for name in (b"kprint", b"boottime"):
@@ -1073,6 +1130,8 @@ def body_run(session, camera, lib):
     if "_out_decoded" in facts:
         import json
         session.save_bytes("out_decoded.json", json.dumps(facts.pop("_out_decoded"), indent=1).encode())
+    for name, blob in (facts.pop("_spans", None) or {}).items():
+        session.save_bytes(name + ".bin", blob)                     # level 31: each DRAM span on its own (cddump_layout.py reads them)
     if klog:
         session.save_bytes("klog.bin", klog)                        # the kernel log buffer on its own, for reading offline
     session.say("Result saved: %d bytes, header %s, effective user id %s, %d sections, %d problem lines, %s"
@@ -1084,6 +1143,13 @@ def body_run(session, camera, lib):
                     % (len(f["log_entries"]), " (" + "; ".join(f["log_folder_error"]) + ")" if f["log_folder_error"] else "", f["klog_bytes"], f["klog_nonzero"],
                        "; reported: " + "; ".join(f["klog_problems"]) if f["klog_problems"] else ""))
         session.say("  /log entries: %s" % ", ".join(f["log_entries"][:64]))
+    if LEVEL == 31:
+        f = facts["level31"]
+        session.say("Level 31: %s; %d spans, %d bytes; spans holding anything but zeros: %d"
+                    % (f["verdict"], len(f["spans"]), sum(s["bytes"] for s in f["spans"]), sum(1 for s in f["spans"] if s["nonzero_bytes"])))
+        for s in f["spans"]:
+            session.say("  span %2d %-22s %s %7d bytes, %7d non-zero, %5d distinct 16-bit words in the first 8 KB%s"
+                        % (s["span"], s["what"], s["phys"], s["bytes"], s["nonzero_bytes"], s["distinct_u16"], "" if s["complete"] else " (NOT complete)"))
     if LEVEL == 10:
         f = facts["level10"]
         session.say("Level 10: %s; kprint log %d bytes, header %s, %s bytes used, %d lines, %s; boot-time log %d bytes (%d non-zero)%s"
@@ -1367,6 +1433,10 @@ def run_helper(data):
     if LEVEL == 26:
         files["/dev/mem"] = b""
         phys = emu_built.w_model(stock=(c.EXTRACTED / VCD_FILE).read_bytes())       # after a boot: the area at 0x43c000000 with the stock image, an empty record area
+    if LEVEL == 31:
+        files["/dev/mem"] = b""
+        rows = emu_built.d31_rows(DESIGN)
+        phys = {a & ~0xFFF: emu_built.d31_pattern(a & ~0xFFF, ((a & 0xFFF) + n + 0xFFF) & ~0xFFF) for a, n, _, _ in rows}
     if LEVEL == 22:
         files["/dev/mem"] = b""
         phys = emu_built.v_model(stock=(c.EXTRACTED / VCD_FILE).read_bytes())       # the codec clocked and running with the stock image
@@ -1762,11 +1832,12 @@ def main():
     parser.add_argument("--remove-only", action="store_true")
     parser.add_argument("--clear-result", metavar="SHA256", help="before the run, delete the helper's result file from the RAM disk, only if its SHA-256 is this (a result already saved here)")
     parser.add_argument("--clear-only", action="store_true", help="with --clear-result: only delete that file; send no library")
-    parser.add_argument("--level", type=int, choices=sorted(set(LIBS) | {13, 14, 16, 17, 18, 19, 20, 23, 24, 25}), default=1, help="which pinned build to use (default 1)")
+    parser.add_argument("--level", type=int, choices=sorted(set(LIBS) | {13, 14, 16, 17, 18, 19, 20, 23, 24, 25, 31}), default=1, help="which pinned build to use (default 1)")
     parser.add_argument("--design", choices=["og4k_data_v1"] + sorted(DESIGN_LIBS), default="og4k_data_v1",
                         help="for levels 5, 6 and 8: whose site table (default og4k_data_v1); for levels 13 and 14: dmmwb4080_v1 or dmmwb4688_v1; "
-                             "for levels 16 and 17: outsz2560_v1, og2560e4_v1, og57cp_v1, og57cp_v2, og57cp_v3, dmmslot8_v1, dmmslot8_v2 or lcdfill_v1; for level 18: ogfile2560_hs_v1, ogfile2560_s_v1, ogfile2560_hs_s_v1, ogfile2560_hs_s_v2, ogfile57_v1, ogfile57r300_v1, ogfile57r300m1_v1, ogfile57r300m1_v2, ogfile57r300m1_v3 or ogfile57r300m1_v4; "
-                             "for levels 19 and 20: ogfile2560_hs_v1, ogfile2560_hs_s_v1, ogfile2560_hs_s_v2, ogfile57_v1, ogfile57r300_v1, ogfile57r300m1_v1, ogfile57r300m1_v2, ogfile57r300m1_v3 or ogfile57r300m1_v4")
+                             "for levels 16 and 17: outsz2560_v1, og2560e4_v1, og57cp_v1, og57cp_v2, og57cp_v3, dmmslot8_v1, dmmslot8_v2 or lcdfill_v1; for level 18: ogfile2560_hs_v1, ogfile2560_s_v1, ogfile2560_hs_s_v1, ogfile2560_hs_s_v2, ogfile57_v1, ogfile57r300_v1, ogfile57r300m1_v1, ogfile57r300m1_v2, ogfile57r300m1_v3, ogfile57r300m1_v4, ogfilesi2560_v1 or ogfilesi57_v1; "
+                             "for levels 19 and 20: ogfile2560_hs_v1, ogfile2560_hs_s_v1, ogfile2560_hs_s_v2, ogfile57_v1, ogfile57r300_v1, ogfile57r300m1_v1, ogfile57r300m1_v2, ogfile57r300m1_v3, ogfile57r300m1_v4, "
+                             "ogfilesi2560_v1 or ogfilesi57_v1 (the XAVC S-I 4K step, after the state's own)")
     parser.add_argument("--firmware-shown")
     parser.add_argument("--library-sha256", help="the SHA-256 of the library you reviewed; must equal the pinned one")
     args = parser.parse_args()

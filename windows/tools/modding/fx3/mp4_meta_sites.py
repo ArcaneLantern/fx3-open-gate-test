@@ -45,12 +45,25 @@ PROFILE_SITES = [
 # FX3 7.02 (2026-11-25): the same writer, relinked (track config 0x21fec4, stsd entry 0x221464, PROF entry 0x223110, tkhd 0x223460, profile id
 # 0x222a94, pixel aspect 0x223088, level label 0x21fad0: matched instruction by instruction against the A7 IV's, the track config 36 of 40 with
 # its jump table rebuilt). Its two 4K heights; only 3840x2560 is a file of the FX3 kit.
+# FX2 1.01 (2026-11-25, modding/FX2_PORT_ENCODER.md): the A7 IV's writer moved by -0x37b4 (track config 0x21f364, stsd entry 0x220918, PROF entry
+# 0x222604, tkhd 0x222954, profile id 0x221f48, pixel aspect 0x22257c, level label 0x21ef60; matched instruction for instruction, the track
+# config 155 of 160 with only its jump-table page offsets different). Its two 4K heights, at the A7 IV's places in the function.
 OTHER_BUILDS = {"fx3_702": {"avc_h": (0x21FF3C, ("mov", "w6, #0x870"), "MP4 track height, XAVC S 4K (AVC)"),
-                            "hevc_h": (0x220074, ("mov", "w6, #0x870"), "MP4 track height, XAVC HS 4K (HEVC)")}}
+                            "hevc_h": (0x220074, ("mov", "w6, #0x870"), "MP4 track height, XAVC HS 4K (HEVC)")},
+                "fx2_101": {"avc_h": (0x21F3DC, ("mov", "w6, #0x870"), "MP4 track height, XAVC S 4K (AVC, combs 0, 2)"),
+                            "hevc_h": (0x21F428, ("mov", "w6, #0x870"), "MP4 track height, XAVC HS 4K (HEVC, combs 5, 7)")}}
+
+
+# A7C II 2.01 (2026-11-25): the A7 IV's writer moved as one block by -0x390c (track config 0x21f20c, stsd entry 0x2207c0, PROF entry 0x2224ac,
+# tkhd 0x2227fc, profile id 0x221df0, pixel aspect 0x222424); every site found by 32 bytes of context, unique, same instruction. Both sizes
+# (3840x2560 and 5760x3840), as on the A7 IV. Checked by build/emu_mp4_meta.py --build a7c2_201.
+SHIFTED = {"a7c2_201": -0x390C}
 
 
 def sites(width, height, build="a7iv_602"):
     """[(address, new 4 bytes, expected (mnemonic, operands) of the stock instruction, note)] for a file of width x height."""
+    if build in SHIFTED:
+        return [(a + SHIFTED[build], new, want, why) for a, new, want, why in sites(width, height)]
     if build != "a7iv_602":
         assert (width, height) == (3840, 2560), "the open-gate file of the %s kit" % build
         s = OTHER_BUILDS[build]

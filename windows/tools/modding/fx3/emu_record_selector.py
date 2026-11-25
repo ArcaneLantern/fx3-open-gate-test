@@ -9,6 +9,8 @@ addresses other than the selector's default}. Read-only: nothing is written anyw
 Builds:
   a7s3_501  selector 0x256128, mode ids 0xc70624 (40)   (modding/A7S3_PORT.md section 14)
   fx3_702   selector 0x2514b8, mode ids 0xc53790 (40)   (same instructions as 0x256128 but for relocated addresses; 2026-11-24)
+  fx2_101   selector 0x27ab64, mode ids 0xe944b0 (32)   (the A7C II's 0x2731f8; 2026-11-25)
+  a7c2_201  selector 0x2731f8, mode ids 0xde99d4 (30)
 """
 import struct
 import sys
@@ -22,7 +24,11 @@ import locate_file  # noqa: E402
 
 BASE = 0x108000
 CONSTS = {"a7s3_501": {"selector": 0x256128, "ids": 0xC70624, "modes": 40},
-          "fx3_702": {"selector": 0x2514B8, "ids": 0xC53790, "modes": 40}}
+          "fx3_702": {"selector": 0x2514B8, "ids": 0xC53790, "modes": 40},
+          # FX2 1.01 (2026-11-25): the A7C II's selector 0x2731f8 at 0x27ab64 (same compare chain; its first bound is 0x501f, the A7C II's 0x5020)
+          "fx2_101": {"selector": 0x27AB64, "ids": 0xE944B0, "modes": 32},
+          # A7C II 2.01, for comparison with the FX2 (A7C II port: build/c2_emu_selector.py)
+          "a7c2_201": {"selector": 0x2731F8, "ids": 0xDE99D4, "modes": 30}}
 KEY, RET = 0x2400000, 0x2410000
 
 

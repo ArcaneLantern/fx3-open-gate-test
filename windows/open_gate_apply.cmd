@@ -1,5 +1,5 @@
 @echo off
-rem FX3 (firmware 7.02): apply the A7S III's default state: 3840x2560 open gate and the rear screen at 3:2, with De-Squeeze Display set for it (four steps, then one read-only session). Not yet run on an FX3.
+rem FX3 (firmware 7.02): apply the default state: 3840x2560 open gate in XAVC HS 4K, XAVC S 4K and XAVC S-I 4K (24p), and the rear screen at 3:2 with De-Squeeze Display set for it (five steps, then one read-only session). Open gate and the screen ran on FX3s; the S-I step is new.
 rem WRITES into the camera's memory (not firmware, not settings). A cold boot (battery out for 10 seconds) returns it to stock; on the A7S III the power switch did too.
 cd /d "%~dp0"
 if not exist ".venv\Scripts\python.exe" (

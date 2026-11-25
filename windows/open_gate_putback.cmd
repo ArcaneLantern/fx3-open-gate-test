@@ -1,5 +1,5 @@
 @echo off
-rem FX3 (firmware 7.02): put all four steps back to stock.
+rem FX3 (firmware 7.02): put all five steps back to stock.
 rem WRITES into the camera's memory (not firmware, not settings). A cold boot (battery out for 10 seconds) returns it to stock; on the A7S III the power switch did too.
 cd /d "%~dp0"
 if not exist ".venv\Scripts\python.exe" (

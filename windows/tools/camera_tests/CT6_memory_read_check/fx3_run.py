@@ -62,9 +62,14 @@ WRITE_STEPS = {
     # them is worse than stock. Independent of the open-gate steps; fx3_apply.py playback / playback-putback.
     "P29": ("libJit_fx3_P29.so", "c0ccb8c8fd80007cbc308720a78deec19fc132067ae5d04c78a555b27f63cc74", "apply the playback decoder avdec8k_fx3_v1 (the A7 IV's 7690x4320 decode channel and its memory: 4 code words and 1 table word of av-cam.bin)"),
     "P30": ("libJit_fx3_P30.so", "671de524a2848830c89764420b69f4417a92cc249b5f5a6726f9fbaac9080079", "put back the playback decoder avdec8k_fx3_v1"),
+    # XAVC S-I 4K (2026-11-25; NOT RUN ON ANY CAMERA): the same level 19/20 code with ogfilesi2560_fx3_v1, the A7 IV's ogfilesi2560_v1 at the FX3's
+    # tables (build/build_ogfile_si.py --build fx3_702, emulated on the FX3's own code by build/emu_ogfilesi_fx3.py). One more step of apply and
+    # putback, so one run gives XAVC HS 4K, XAVC S 4K and XAVC S-I 4K at 3840x2560; its sites are none of L19's (--no-si leaves it out).
+    "I19": ("libJit_fx3_I19.so", "740ba55937c233d1b143d14b8e48e826a8988ff78e72e8cf10d26dea8f14c8cc", "apply XAVC S-I 4K at 3840x2560: ogfilesi2560_fx3_v1 (the S-I encoder request, 4 descriptors and their profiles: 16 + 1 sites)"),
+    "I20": ("libJit_fx3_I20.so", "5cc2d1a692dbd3136c51ec88c345ea23c4204e83d7503721d9407ac9c636f63e", "put back XAVC S-I 4K: ogfilesi2560_fx3_v1"),
 }
 PINS.update({k: v[:2] for k, v in WRITE_STEPS.items()})
-LEVELS.update({k: {"L": 200, "S": 300, "N": 500, "P": 600}[k[0]] + int(k[1:]) for k in WRITE_STEPS})
+LEVELS.update({k: {"L": 200, "S": 300, "N": 500, "P": 600, "I": 700}[k[0]] + int(k[1:]) for k in WRITE_STEPS})
 WHICH = "check"
 
 
@@ -459,7 +464,7 @@ def main():
     ap.add_argument("--remove-only", action="store_true")
     ap.add_argument("--clear-result", metavar="SHA256", help="first delete the result file of an earlier run from the RAM disk, only if its SHA-256 is this")
     ap.add_argument("--firmware-shown")
-    ap.add_argument("--writes-memory", action="store_true", help="needed for a write step (L5, L6, L16, L17, L19, L20, N19, S16, S17, P29, P30): it changes the running camera's memory")
+    ap.add_argument("--writes-memory", action="store_true", help="needed for a write step (L5, L6, L16, L17, L19, L20, N19, S16, S17, P29, P30, I19, I20): it changes the running camera's memory")
     a = ap.parse_args()
     if a.which in WRITE_STEPS and a.go and not (a.dry_run or a.selftest) and not a.writes_memory:
         raise SystemExit("%s is a write step: %s. It needs --writes-memory as well. Use fx3_apply.py. Nothing was sent." % (a.which, WRITE_STEPS[a.which][2]))

@@ -12,6 +12,9 @@ only their tables differ. This writes, into helper/, in the formats helper/gen_e
   expected_mp_ogfile2560_hs_s_fx3_v1.h    levels 19 and 20 (and 18): the encoder-side sites and guards
 and for the rear screen, built as separate libraries (S16, S17):
   expected_words_lcd32dsq_fx3_v1.h        levels 16 and 17: the 3:2 ratio, the frame-table entries and the de-squeeze words, with their guards
+and since 2026-11-25:
+  expected_ad_avdec8k_fx3_v1.h            levels 29 and 30: the playback decoder (av-cam code and data)
+  expected_mp_ogfilesi2560_fx3_v1.h       levels 19 and 20 again (I19 / I20): XAVC S-I 4K at 3840x2560 (build/build_ogfile_si.py --build fx3_702)
 The FX3 kit has no preview-key routine: the camera's own Anamorphic Desqueeze is kept. Every stock byte is compared with the 7.02 files here. gen_expected.py is not used: its checks name A7 IV
 addresses. The same kinds of check are made below with this build's.
 """
@@ -229,3 +232,4 @@ if __name__ == "__main__":
     print("mp header, with the MP4 header heights:", mp_header("ogfile2560_hs_s_fx3_v2"))
     print("words header, rear screen and de-squeeze:", words_header("lcd32dsq_fx3_v1"))
     print("ad header, playback decoder (levels 29 and 30):", ad_header())
+    print("mp header, XAVC S-I 4K (I19 / I20):", mp_header("ogfilesi2560_fx3_v1"))
