@@ -3,19 +3,28 @@
   python fx3_apply.py apply    [--no-screen] [--dry-run]
   python fx3_apply.py putback  [--no-screen] [--dry-run]
   python fx3_apply.py screen | screen-putback  [--dry-run]
+  python fx3_apply.py playback | playback-putback  [--dry-run]      (optional, NOT RUN ON ANY CAMERA: in-camera playback)
   (apply and screen take --no-movie-session to leave out the closing read-only session)
 
 The FX3 counterpart of s3_apply.py: the A7S III's default state (the owner, 2026-11-23), which records a true 3840x2560 file of
 the whole sensor area on an A7S III and shows it at 3:2 on the rear screen. The FX3 7.02 coprocessor software is the A7S III 5.01
 software relinked; every design here is the A7S III's at the FX3's addresses, checked against the FX3's own code in emulation.
-NOTHING OF THIS KIT HAS RUN ON AN FX3 YET.
+THE FIRST KIT RAN ON AN FX3 (2026-11-24): open gate recorded (XAVC HS 4K and XAVC S 4K, the whole sensor area), the rear screen at 3:2;
+in-camera playback of those clips failed and once froze the camera. Since 2026-11-25 step L19 also makes the MP4 headers say 3840x2560
+(ogfile2560_hs_s_fx3_v2, the A7 IV's working header fix); --no-meta keeps the first kit's encoder step (N19). Not run yet.
 
   apply    four steps, each its own USB session: L5 sensor side (ogsq_fx3_v1), L16 output size (outsz2560_fx3_v1),
-           L19 encoder side (ogfile2560_hs_s_fx3_v1), S16 rear screen at 3:2 with the focus frames and the camera's own
+           L19 encoder side (ogfile2560_hs_s_fx3_v2), S16 rear screen at 3:2 with the focus frames and the camera's own
            De-Squeeze Display set for the 3:2 picture (lcd32dsq_fx3_v1). Afterwards: XAVC HS 4K or XAVC S 4K at 23.98p only.
            With --no-screen only the first three. A step that finds its bytes already applied says NOTHING TO DO and counts as passed.
   putback  the reverse: S17, L20, L17, L6 (with --no-screen the last three). A cold boot (battery out for 10 seconds) also undoes everything.
   screen / screen-putback   only the screen step (S16) or its put back (S17).
+  playback / playback-putback   only the playback step (P29) or its put back (P30), 2026-11-25, NOT RUN ON ANY CAMERA. FX3 7.02 opens
+           every playback decoder at 4096x2160, so a 3840x2560 clip does not play ("Unable to display"). P29 makes it open the A7 IV's
+           7690x4320 channel with its memory (avdec8k_fx3_v1), which the A7 IV uses for the same clips. It changes four instructions of
+           av-cam.bin (kernel code) and one table word; the library refuses unless the processors' caches can be made to fetch the new
+           instructions, and writes in an order that leaves no state between its writes worse than stock. Independent of the open-gate
+           steps (before or after them); apply and putback do not include it; a cold boot removes it.
 
 There is no preview-key routine in this kit (the A7S III kit's C3 step): the FX3's own De-Squeeze Display (MENU > Setup >
 Display Option > De-Squeeze Display: 1.3x, 1.5x, 1.6x, 2.0x) is kept, and S16 sets its ratios for the 3:2 picture.
@@ -47,7 +56,8 @@ import ct1_common as c  # noqa: E402
 import fx3_run  # noqa: E402
 
 FIRMWARE = fx3_run.FIRMWARE
-STEPS = {"apply": ("L5", "L16", "L19"), "putback": ("L20", "L17", "L6"), "screen": ("S16",), "screen-putback": ("S17",)}
+STEPS = {"apply": ("L5", "L16", "L19"), "putback": ("L20", "L17", "L6"), "screen": ("S16",), "screen-putback": ("S17",),
+         "playback": ("P29",), "playback-putback": ("P30",)}
 RUNNER = HERE / "fx3_run.py"
 LISTER = HERE.parent / "CT1_usb_first_contact" / "ct1_stage2_service.py"
 STILL = "a still-image mode (press MODE, choose Program Auto, Aperture Priority, Shutter Priority or Manual Exposure with the control wheel, press its centre)"
@@ -79,7 +89,7 @@ def last_check():
         res = man.get("results", {})
         f = (res.get("ct6", {}).get("result") or {}).get("s3")
         if res.get("which") in ("check", "dump") and f:       # a dump makes every check the check makes, and gives the same verdict
-            current = "fx3read_v1 " in f.get("header", "") and "ILME-FX3 7.02" in f.get("header", "")
+            current = any(v in f.get("header", "") for v in ("fx3read_v1 ", "fx3read_v2 ")) and "ILME-FX3 7.02" in f.get("header", "")
             return folder.name, current and bool(f.get("ready")) and not f.get("identity_differs")
     return None
 
@@ -187,14 +197,20 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="show the steps and what each would send; nothing is sent")
     ap.add_argument("--no-screen", action="store_true", help="with apply or putback: only the three open-gate steps, without the screen step")
     ap.add_argument("--no-movie-session", action="store_true", help="with apply or screen: leave out the closing read-only session in movie mode")
+    ap.add_argument("--no-meta", action="store_true", help="with apply: the first kit's encoder step (N19), whose MP4 headers keep saying 3840x2160")
     a = ap.parse_args()
     steps = STEPS[a.what]
     if a.no_screen and a.what not in ("apply", "putback"):
         raise SystemExit("--no-screen goes with apply or putback. Nothing was sent.")
+    if a.no_meta and a.what != "apply":
+        raise SystemExit("--no-meta goes with apply (the put back L20 puts back either encoder step). Nothing was sent.")
+    if a.no_meta:
+        steps = tuple("N19" if k == "L19" else k for k in steps)
     with_screen = not a.no_screen
     if a.what in ("apply", "putback") and with_screen:
         steps = steps + STEPS["screen"] if a.what == "apply" else STEPS["screen-putback"] + steps
-    applying = a.what in ("apply", "screen")
+    applying = a.what in ("apply", "screen", "playback")
+    closing = a.what in ("apply", "screen")           # the closing read-only session in Movie: only after the open-gate or screen steps
     for k in steps:                                  # every library must be the pinned one before anything starts
         name, sha, _ = fx3_run.WRITE_STEPS[k]
         p = fx3_run.S3 / name
@@ -203,7 +219,7 @@ def main():
     say("FX3 7.02, %s: %d steps" % (a.what, len(steps)))
     for n, k in enumerate(steps, 1):
         say("  %d. %s  %s  (library %s...)" % (n, k, fx3_run.WRITE_STEPS[k][2], fx3_run.WRITE_STEPS[k][1][:16]))
-    if applying and not a.no_movie_session:
+    if closing and not a.no_movie_session:
         say("  then one read-only session (dump) in Movie: it corrected the glitchy live view after the apply on the A7S III. Nothing is written in it.")
     if a.dry_run:
         for k in steps:
@@ -220,13 +236,21 @@ def main():
                          % ("does not exist" if chk is None else "(%s) does not say READY" % chk[0]))
     say()
     say("This WRITES into the running camera's memory (not its firmware, not its settings).")
-    if applying:
-        say("NOT RUN ON AN FX3 YET. The same steps work on an A7S III (2026-11-22); the FX3 runs the same coprocessor software.")
+    if a.what in ("playback", "playback-putback"):
+        say("The playback step is NEW and has NOT RUN ON ANY CAMERA. It changes four instructions of av-cam.bin (the kernel's AV code) and one")
+        say("  word of its decode table. Its library checks the whole code page against the firmware file, reads the processors' cache type,")
+        say("  and refuses unless it can make every processor fetch the new instructions; it then writes the instructions first and the")
+        say("  table word last (put back: the table word first). If anything is not as expected it writes nothing.")
+    elif applying:
+        say("The first kit ran on an FX3 (2026-11-24): open gate recorded and the screen showed 3:2. New since then and not run yet: step L19")
+        say("  also makes the MP4 headers say 3840x2560 (use --no-meta for the first kit's encoder step).")
     else:
         say("It has to follow an apply of this kit.")
     say("A cold boot (battery out for 10 seconds) returns the camera to stock. On the A7S III the power switch did too:")
     say("so KEEP THE CAMERA SWITCHED ON from now until the script says it is finished.")
-    if a.what == "apply":
+    if a.what in ("playback", "playback-putback"):
+        say("Before you go on: a charged battery, %s, and the camera NOT in playback (no clip open)." % STILL)
+    elif a.what == "apply":
         say("Before you go on: %s, a charged battery," % STILL)
         say("and a camera that was cold booted and has not been in Movie or S&Q since. (If it starts in Movie: choose a still mode,")
         say("pull the battery for 10 seconds, put it back and switch on: it starts in the still mode.)")
@@ -257,6 +281,15 @@ def main():
             raise SystemExit(1)
     say()
     say("All %d steps passed (%s)." % (len(steps), a.what))
+    if applying and a.what == "apply":
+        if a.no_meta:
+            say("The files' MP4 headers say 3840x2160 (--no-meta): editors may open them squeezed; a remux to 3840x2560 fixes that.")
+        else:
+            say("The files' MP4 headers (tkhd, stsd, Sony's PROF) now say 3840x2560: editors should open them at 3:2 without a remux.")
+            say("  Sony's XML (in the file and the sidecar) still says 3840x2160, 16:9.")
+        say("DO NOT PLAY CLIPS BACK ON THE CAMERA while it is applied: on two FX3s an open-gate clip showed 'unable to display', and")
+        say("  a second try froze the camera until the battery was pulled. Check the clips on a computer. (The optional, untested")
+        say("  playback step is meant to fix this: fx3_apply.py playback / playback_fix_apply.)")
     if with_screen and applying:
         say("The screen step: in Movie the rear screen should now show the whole picture at 3:2. On a 4:3 screen (what the FX3's")
         say("  1.44M-dot panel is expected to be) there are thin black bars above and below; on a 3:2 screen it fills it. A circle should look round.")
@@ -264,7 +297,17 @@ def main():
         say("  1.3x shows 1.95:1, 1.5x 2.25:1, 1.6x 2.475:1, 2.0x 3:1 (the whole frame; the stock centre crop is off). The file does not change.")
         say("  While it is applied every 16:9 picture is shown as if it were this 3:2 picture (other movie formats look wrong on the screen).")
         say("  Please report: the screen with De-Squeeze Display Off and at each factor (a photo of something round helps), and the focus frames.")
-    if applying:
+    if a.what == "playback":
+        say("The camera's playback decoder now opens the A7 IV's 7690x4320 channel (the one the A7 IV plays 3840x2560 clips with).")
+        say("Please test, in this order, and write down what each does:")
+        say("  1. Unplug USB. Press the playback button and open an ordinary clip (16:9, e.g. 4K or HD, recorded without the open-gate state).")
+        say("  2. Then ONE open-gate 3840x2560 clip. If it says 'Unable to display': do NOT try again (a retry froze an FX3 before);")
+        say("     leave playback and report. If the camera freezes or restarts: pull the battery for 10 seconds.")
+        say("  3. If it plays: does it show the whole 3:2 frame, and does it play to the end?")
+        say("Then send the newest folders in camera_private. To put it back: playback-putback, or battery out for 10 seconds.")
+    elif a.what == "playback-putback":
+        say("The playback decoder is stock again (4096x2160).")
+    if closing:
         if a.no_movie_session:
             say(">>> BEFORE you unplug: set %s. Then unplug USB." % MOVIE)
             say("    If the live view is glitchy: start and stop a short recording, or run dump_info in Movie.")

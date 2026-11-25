@@ -1,5 +1,5 @@
 {
- "label": "fx3read_v1",
+ "label": "fx3read_v2",
  "cp_lo": 786432,
  "cp_hi": 34603008,
  "avcam_phys": 17196646400,
@@ -347,7 +347,7 @@
    "soft": 1
   }
  ],
- "lm_sites": 4,
+ "lm_sites": 6,
  "av_sites": 101,
  "av_guards": [
   "unit_rows_0_2",
@@ -434,7 +434,7 @@
  "designs": {
   "ogsq_fx3_v1": "a18e3168adb5fb4e56a12e5c172b978881f87b7099c3cc8865a00e7a4ad82677",
   "outsz2560_fx3_v1": "de9da1aa1523188d9246be7823a5d0c5e117a442de5b0b08ffbf48859deba418",
-  "ogfile2560_hs_s_fx3_v1": "f268a4e314ea7431e690454f194cca80e9d0cf4a4a9ffd4b59bf7feed453102a",
+  "ogfile2560_hs_s_fx3_v2": "cbfbb1ab1cf1954909a46ce9a52bf5183b4b5fb7f7a33af184f8ec2fce365f1c",
   "lcd32dsq_fx3_v1": "1e87ca0b0416494883fa84aaafd0eef4503268a96834395d1a61ef5b1501ed62"
  }
 }

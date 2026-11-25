@@ -35,8 +35,8 @@ import ct6_level1_run as R  # noqa: E402
 
 FIRMWARE, MODEL, BUILD = "7.02", "ILME-FX3", "fx3_702"
 S3 = HERE / "helper_fx3"                       # this kit's folder (the name S3 is kept from s3_run.py)
-PINS = {"check": ("libJit_fx3_check.so", "fcf97a8ea56abee543734779b8cac10267b4b33adda863a4032c11436e6d78ce"),
-        "dump": ("libJit_fx3_dump.so", "ad2bae7922865dd7faf3bce59aa4114e53fe56ce4366b133c96ce91414592527")}
+PINS = {"check": ("libJit_fx3_check.so", "6f99aef2399a739b06d282e6b67cad842c643e33d04caad5fe4721558097cff6"),      # fx3read_v2 (2026-11-25)
+        "dump": ("libJit_fx3_dump.so", "fdb83bfe2393f2cb1fe383e2cf9760cbd45d849b5425ae5ae47084df123511f8")}
 LEVELS = {"check": 101, "dump": 102}              # numbers outside the A7 IV runner's own levels: none of its level-specific code runs
 # THE WRITE STEPS. Each is one library built from the A7 IV helper's write code with this camera's tables (helper_fx3/build_fx3_write.sh).
 # They change the running camera's memory until a cold boot. They are run through fx3_apply.py, never by a launcher of the read-only kit,
@@ -46,15 +46,25 @@ WRITE_STEPS = {
     "L6": ("libJit_fx3_L6.so", "6c8544fb91879ba4c1b8ce9351826253b61557d797466f836e4e8e65b0acf3b6", "put back the sensor-side design ogsq_fx3_v1"),
     "L16": ("libJit_fx3_L16.so", "cf644fb3d893c54ed80bffdde74fc51d7a4aab90bd74486f240ae23aaf3f636f", "apply the output size outsz2560_fx3_v1 (one word)"),
     "L17": ("libJit_fx3_L17.so", "5a3c16bf88a3f7f817df12ea0e9aea8dc8e694755af69ac86f6e8339c6eba0d4", "put back the output size outsz2560_fx3_v1"),
-    "L19": ("libJit_fx3_L19.so", "47400649ac29ac03fd77b4805e0a41c60b4a3cfa1ae5e3f384f0d33a0b503050", "apply the encoder-side design ogfile2560_hs_s_fx3_v1 (101 + 4 sites)"),
-    "L20": ("libJit_fx3_L20.so", "6ca3ee7df282bda70bc50bb4f9284ccc622c2c20e6ab64b964a949148a33d836", "put back the encoder-side design ogfile2560_hs_s_fx3_v1"),
+    # L19/L20 since 2026-11-25: ogfile2560_hs_s_fx3_v2 = the first kit's encoder side (which ran on an FX3) + the two MP4 header heights, so
+    # tkhd, stsd and Sony's PROF say 3840x2560 (the A7 IV's ogfile2560_hs_s_v2). L20 puts back either version. N19 = the first kit's L19,
+    # byte for byte (apply --no-meta); its put back is L20 too (the first kit's L20 would leave the two heights on a v2 camera).
+    "L19": ("libJit_fx3_L19.so", "c028f58c3e3a941e22eaf07445df7137eb4c739d48ce0b4f3fdac4f7744828e6", "apply the encoder-side design ogfile2560_hs_s_fx3_v2 (101 + 4 sites, and the MP4 headers say 3840x2560: 2 more)"),
+    "L20": ("libJit_fx3_L20.so", "b84dd6758c18bed649aba7d3f62820a9bbb462f4fcceeade27bb91cdbe960f67", "put back the encoder-side design ogfile2560_hs_s_fx3_v2 (or the first kit's v1)"),
+    "N19": ("libJit_fx3_N19.so", "47400649ac29ac03fd77b4805e0a41c60b4a3cfa1ae5e3f384f0d33a0b503050", "apply the first kit's encoder-side design ogfile2560_hs_s_fx3_v1 (101 + 4 sites; the MP4 headers keep 3840x2160)"),
     # The rear-screen step (optional, on top of the open-gate state): the same level 16/17 code with the screen words. The digits are the level the
     # library reports in its result's first line. There is no C step: the FX3's own De-Squeeze Display is kept (its ratios are part of S16).
     "S16": ("libJit_fx3_S16.so", "bc40334bb9bd44b69f6f6eb268b90f37696e1126c773dfe483acb0f9b369beef", "apply the screen words lcd32dsq_fx3_v1 (3:2 picture on the rear screen, the focus-frame rectangles, and De-Squeeze Display ratios for a 3:2 picture: 30 words)"),
     "S17": ("libJit_fx3_S17.so", "50a962685412467e2c9fb3f60440c2a8de5cf6d26ec71f1e4d7c305c4b396f0e", "put back the screen words lcd32dsq_fx3_v1"),
+    # The playback step (optional, 2026-11-25; NOT RUN ON ANY CAMERA): in-camera playback of 3840x2560 clips with the A7 IV's decode channel
+    # (avdec8k_fx3_v1: four code words and one table word of av-cam.bin, readcheck.c levels 29 / 30). The code words are kernel text: the
+    # library refuses unless the processors' instruction caches can be made to fetch them afresh, and orders the writes so no state between
+    # them is worse than stock. Independent of the open-gate steps; fx3_apply.py playback / playback-putback.
+    "P29": ("libJit_fx3_P29.so", "c0ccb8c8fd80007cbc308720a78deec19fc132067ae5d04c78a555b27f63cc74", "apply the playback decoder avdec8k_fx3_v1 (the A7 IV's 7690x4320 decode channel and its memory: 4 code words and 1 table word of av-cam.bin)"),
+    "P30": ("libJit_fx3_P30.so", "671de524a2848830c89764420b69f4417a92cc249b5f5a6726f9fbaac9080079", "put back the playback decoder avdec8k_fx3_v1"),
 }
 PINS.update({k: v[:2] for k, v in WRITE_STEPS.items()})
-LEVELS.update({k: {"L": 200, "S": 300}[k[0]] + int(k[1:]) for k in WRITE_STEPS})
+LEVELS.update({k: {"L": 200, "S": 300, "N": 500, "P": 600}[k[0]] + int(k[1:]) for k in WRITE_STEPS})
 WHICH = "check"
 
 
@@ -64,14 +74,14 @@ def write_result(data):
     text = data.decode("utf8", "replace")
     lines = text.split("\n")
     pick = lambda start: next((ln for ln in lines if ln.startswith(start)), None)
-    outcome = ("UNDO INCOMPLETE" if pick("!! UNDO INCOMPLETE") else "DONE" if pick("DONE: ") else "NOTHING TO DO" if pick("NOTHING TO DO") else
+    outcome = ("UNDO INCOMPLETE" if pick("!! UNDO INCOMPLETE") or pick("UNDO INCOMPLETE") else "DONE" if pick("DONE: ") else "NOTHING TO DO" if pick("NOTHING TO DO") else
                "NOT DONE (everything put back)" if pick("NOT DONE: ") else "NOTHING WRITTEN" if any("nothing is written" in ln for ln in lines) else "UNKNOWN")
     problems = [ln for ln in lines if ln.startswith("!!")]
     return {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(), "header_ok": lines[0].startswith("readcheck 1 level %s" % WHICH[1:]),
             "euid": "see the result", "sections": [ln for ln in lines if ln.startswith("== ")], "problems": len(problems),
             "complete": any(ln.startswith("== done") for ln in lines[-3:]),
             "s3": {"step": WHICH, "what": WRITE_STEPS[WHICH][2], "outcome": outcome, "ok": outcome in ("DONE", "NOTHING TO DO"),
-                   "outcome_line": pick("DONE: ") or pick("NOTHING TO DO") or pick("NOT DONE: ") or pick("!! UNDO INCOMPLETE"), "problem_lines": problems}}
+                   "outcome_line": pick("DONE: ") or pick("NOTHING TO DO") or pick("NOT DONE: ") or pick("!! UNDO INCOMPLETE") or pick("UNDO INCOMPLETE"), "problem_lines": problems}}
 
 
 def reference():
@@ -278,7 +288,7 @@ def run_helper(data):
     try:
         import emu_fx3
     except Exception:
-        text = "fx3read fx3read_v1 %s for ILME-FX3 7.02; read-only\n== file /proc/version\nLinux (simulated)\n\n== end 18 bytes\n== summary\nVERDICT READY (canned)\n== done\n" % WHICH
+        text = "fx3read fx3read_v2 %s for ILME-FX3 7.02; read-only\n== file /proc/version\nLinux (simulated)\n\n== end 18 bytes\n== summary\nVERDICT READY (canned)\n== done\n" % WHICH
         return text.encode(), "canned"
     r, text = emu_fx3.run(bytes(data))
     if r.bad:
@@ -329,7 +339,8 @@ def selftest(lib):
     else:
         check(f.get("ready") and not f.get("identity_differs"), "normal run: the %s helper reports a stock 7.02 camera as READY" % sim.how)
     if sim.how == "emulated":
-        check(len(f["coprocessor_sites"]) == len(expected()["cp_sites"]) and f["avcam_stock"] == 101 and len(f["libmpr_sites"]) == 4, "normal run: every coprocessor site, 4 libmpr and 101 av-cam sites are reported")
+        check(len(f["coprocessor_sites"]) == len(expected()["cp_sites"]) and f["avcam_stock"] == 101 and len(f["libmpr_sites"]) == expected()["lm_sites"] == 6,
+              "normal run: every coprocessor site, 6 libmpr (4 rows, 2 MP4 header heights) and 101 av-cam sites are reported")
         if WHICH == "dump":
             d = f.get("decoded", {})
             check(d.get("matrix_equals_file") and len(d.get("stored_records", {})) == 40 and d.get("size_table"), "dump: the pages decode (matrix, 40 records, size table)")
@@ -448,7 +459,7 @@ def main():
     ap.add_argument("--remove-only", action="store_true")
     ap.add_argument("--clear-result", metavar="SHA256", help="first delete the result file of an earlier run from the RAM disk, only if its SHA-256 is this")
     ap.add_argument("--firmware-shown")
-    ap.add_argument("--writes-memory", action="store_true", help="needed for a write step (L5, L6, L16, L17, L19, L20, S16, S17): it changes the running camera's memory")
+    ap.add_argument("--writes-memory", action="store_true", help="needed for a write step (L5, L6, L16, L17, L19, L20, N19, S16, S17, P29, P30): it changes the running camera's memory")
     a = ap.parse_args()
     if a.which in WRITE_STEPS and a.go and not (a.dry_run or a.selftest) and not a.writes_memory:
         raise SystemExit("%s is a write step: %s. It needs --writes-memory as well. Use fx3_apply.py. Nothing was sent." % (a.which, WRITE_STEPS[a.which][2]))

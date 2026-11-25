@@ -320,7 +320,11 @@ static const unsigned char B314[] = {112,8};
 static const unsigned char B315[] = {0,10};
 static const unsigned char B316[] = {112,8,0,0};
 static const unsigned char B317[] = {0,10,0,0};
-#define FX3_LABEL "fx3read_v1"
+static const unsigned char B318[] = {6,14,129,82};
+static const unsigned char B319[] = {6,64,129,82};
+static const unsigned char B320[] = {6,14,129,82};
+static const unsigned char B321[] = {6,64,129,82};
+#define FX3_LABEL "fx3read_v2"
 #define CP_LO 0xc0000U
 #define CP_HI 0x2100000U
 #define AVCAM_PHYS 0x401000000UL
@@ -404,6 +408,8 @@ static const struct mp_site lm_sites[] = {
     {0x2cb1b6UL, 2, B110, B111},
     {0x2cb10eUL, 2, B212, B213},
     {0x2cb13eUL, 2, B214, B215},
+    {0x21ff3cUL, 4, B318, B319},
+    {0x220074UL, 4, B320, B321},
 };
 static const struct mp_site av_sites[] = {
     {0x395098UL, 16, B112, B113},

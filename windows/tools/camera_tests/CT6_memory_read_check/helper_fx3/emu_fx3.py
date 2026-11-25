@@ -7,6 +7,7 @@ one whole page, direction 0, into the allocated buffer is accepted). Cases, for 
   stock        an FX3 with the 7.02 files and stock memory                         -> every check same, verdict READY
   applied      every design site holding its new bytes, the screen step included   -> TARGET everywhere, verdict READY
   no-screen    the open-gate state without the screen step                         -> open-gate TARGET, screen words STOCK, READY
+  first-kit    the first kit's encoder side (ogfile2560_hs_s_fx3_v1, no MP4 heights) -> its sites TARGET, the two heights STOCK, READY
   a7s3         the A7S III 5.01 files and coprocessor image (wrong camera)         -> identity DIFFERS, verdict NOT READY
   zve1         the ZV-E1 2.02 files and coprocessor image (wrong camera)           -> identity DIFFERS, verdict NOT READY
   no-reserve   a command line without the av-cam reservation                        -> av-cam.bin not read, NOT READY
@@ -86,12 +87,12 @@ class Run(E.Run):
         return self
 
 
-def model(build="fx3_702", applied=False, screen=True, reserve=True, exists=False):
+def model(build="fx3_702", applied=False, screen=True, reserve=True, exists=False, enc="ogfile2560_hs_s_fx3_v2"):
     cp = bytearray(ex(build, "nflasha8/cpapp-b.bin"))
     av = bytearray(ex(build, "nflasha3/av-cam.bin"))
     libs = {n: ex(build, "nflasha15/lib" + n) for n in ("/libmpr.so", "/libsencore.so", "/libJiritsu.so")}
     lm = bytearray(libs["/libmpr.so"])
-    og, oz, fl, sc = design("ogsq_fx3_v1"), design("outsz2560_fx3_v1"), design("ogfile2560_hs_s_fx3_v1"), design("lcd32dsq_fx3_v1")
+    og, oz, fl, sc = design("ogsq_fx3_v1"), design("outsz2560_fx3_v1"), design(enc), design("lcd32dsq_fx3_v1")
     ram = {}
     if build == "fx3_702":                       # the FX3's RAM tables; a foreign body keeps its own image and zeros
         sr = og["stored_record"]
@@ -145,6 +146,7 @@ def main():
         lib = (HERE / f"libJit_fx3_{which}.so").read_bytes()
         for case, kw, want in (("stock", {}, ("VERDICT READY", "STOCK")), ("applied", {"applied": True}, ("VERDICT READY", "TARGET")),
                                ("no-screen", {"applied": True, "screen": False}, ("VERDICT READY", "TARGET")),
+                               ("first-kit", {"applied": True, "enc": "ogfile2560_hs_s_fx3_v1"}, ("VERDICT READY", "TARGET")),
                                ("a7s3", {"build": "a7s3_501"}, ("VERDICT NOT READY", "DIFFERS from the 7.02 update")),
                                ("zve1", {"build": "zve1_202"}, ("VERDICT NOT READY", "DIFFERS from the 7.02 update")),
                                ("no-reserve", {"reserve": False}, ("VERDICT NOT READY", "av-cam.bin is not read")), ("exists", {"exists": True}, ())):
@@ -171,6 +173,10 @@ def main():
                     st = sum(1 for ln in text.split("\n") if ln.startswith("site screen") and ln.endswith("  STOCK"))
                     if st != screen_n or text.count("TARGET") < len(hard) - screen_n + FACTS["lm_sites"] + FACTS["av_sites"]:
                         problems.append("no-screen: %d screen words stock (want %d)" % (st, screen_n))
+                if case == "first-kit":                    # the first kit's encoder side: its sites TARGET, the two header heights STOCK
+                    lm = [ln for ln in text.split("\n") if ln.startswith("lm ")]
+                    if sum(ln.endswith("TARGET") for ln in lm) != 4 or sum(ln.endswith("STOCK") for ln in lm) != 2:
+                        problems.append("first-kit: libmpr lines %s" % lm)
                 if which == "dump" and case == "stock" and text.count("cppage ") != sum(k for _, _, k in FACTS["dump_ranges"]):
                     problems.append("dump pages: %d" % text.count("cppage "))
             n_tr = sum(1 for c in r.lib_calls if c[0] == "transfer")

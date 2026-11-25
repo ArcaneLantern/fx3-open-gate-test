@@ -1,19 +1,29 @@
 # FX3 open gate: test kit (firmware 7.02)
 
-<p><b>Not run on an FX3 yet.</b> This kit is the A7S III open-gate kit, which works on one tester's A7S III (2026-11-22), ported to the Sony FX3 (ILME-FX3) firmware 7.02. It records a true 3840 × 2560 picture of the whole sensor area at 23.98p, shows it at 3:2 on the rear screen, and sets the FX3's own De-Squeeze Display for it. The patch only writes to the camera's memory.</p>
+<p><b>Open gate works on the FX3 (two testers, 2026-11-24).</b> This kit is the A7S III open-gate kit ported to the Sony FX3 (ILME-FX3) firmware 7.02. It records a true 3840 × 2560 picture of the whole sensor area at 23.98p, shows it at 3:2 on the rear screen, and sets the FX3's own De-Squeeze Display for it. The patch only writes to the camera's memory.</p>
+
+**Where it stands (2026-11-25):**
+
+- **The file is right.** Recorded in XAVC HS 4K (HEVC) and XAVC S 4K (AVC) at 23.98p: a true 3840 × 2560 picture. Against a full-sensor photo it covers 99.7–99.99% of the width and height (a second tester's measurement, `FX3-UPSTREAM-TEST-REPORT-2026-11-24.md`).
+- **The screen is right.** The movie live view is 3:2. The dump read the rear panel's type: it is a **4:3** panel, as the firmware suggested.
+- **New in this version, not run yet:** the files' MP4 headers (`tkhd`, the `stsd` sample entry and Sony's PROF/VPRF) now say 3840 × 2560, so editors open them at 3:2 without a remux. This is the A7 IV kit's header fix, which works on that camera, ported to the FX3. `open_gate_apply_no_meta.cmd` gives the first version's encoder step instead.
+- **Do not play clips back on the camera** unless you are testing the playback step. On both testers' cameras an open-gate clip would not play ("unable to display"), and a second try froze the camera until the battery was pulled. Check the clips on a computer. The cause is found: the FX3 opens every playback at 4096 × 2160, too small for a 3840 × 2560 picture (the A7 IV uses its 8K size).
+- **New, optional, not run on any camera: the playback step** (`playback_fix_apply.cmd`). It makes the FX3 open playback the way the A7 IV does, at 7690 × 4320 with that size's memory. It is a new kind of change for this kit (four instructions of the camera's AV code), so it is a separate launcher and the open-gate apply does not run it. See "The playback step".
+- **Still not right:** Sony's XML (in the file and the sidecar) says 3840 × 2160, 16:9. The stream's level label (HEVC 5.0 / AVC 5.1) is below what a 3840 × 2560 picture needs; computers decode it anyway. The LCD goes black for under half a second when an XAVC S recording starts (the file is not affected).
+- **A power-off removes the patch:** apply it again after every power-on.
 
 **What it does.** A true 3840 × 2560 (3:2) recording in XAVC HS 4K and XAVC S 4K at 23.98p, set in the camera's memory only. A battery pull removes it. On the A7S III, switching the camera off and on removes it too.
 
-**Why it should work, and what is not known:**
+**Why it works:**
 
 - **Same software.** The FX3 7.02 image processor runs the A7S III 5.01 image-processor software, rebuilt at other addresses. It has the same sensor (IMX510), the same 40 video modes, the same sensor tables byte for byte, the same record calculator and the same scaler code.
 - **Same designs.** Every step of this kit is the A7S III's working step at the FX3's addresses. Each was checked against the FX3's own code in emulation (`PORT_NOTES.md`).
 - **Kits cannot be mixed up.** An A7S III kit run on an FX3 refuses to start, and so does this kit on an A7S III. Checked in emulation.
-- **Not yet on a camera:** that the FX3 behaves like the A7S III did, the rear panel's shape, and what the De-Squeeze Display shows.
+- **Not reported yet:** what the De-Squeeze Display shows, the focus frames, long recordings, exposure and autofocus, PAL.
 
 **No C3 preview routine.** The A7S III kit adds an anamorphic preview on its C3 key. The FX3 has its own **De-Squeeze Display**, so this kit keeps that instead and sets its shapes for the 3:2 picture (see "De-Squeeze Display").
 
-**The rear screen.** Sony gives the FX3's monitor as 3.0-type, 1,440,000 dots, the same as the A7S III's. In the firmware's display table the only geometry with that many dots is 800 × 600, a **4:3** panel, so a 4:3 panel is the likely one. The panel's type is read from the camera's settings memory while it runs. The screen step is made to work on a 4:3 and on a 3:2 panel. The closing session of the apply reads the panel type and prints it: please send it back.
+**The rear screen.** Sony gives the FX3's monitor as 3.0-type, 1,440,000 dots, the same as the A7S III's. In the firmware's display table the only geometry with that many dots is 800 × 600, a **4:3** panel, and the first tester's dump read the panel's type: 2, a 4:3 panel. The 3:2 picture therefore has thin black bars above and below. The screen step works on a 4:3 and on a 3:2 panel.
 
 | Launcher | What it does | Writes to the camera? |
 |---|---|---|
@@ -21,8 +31,11 @@
 | `dump_info.cmd` | The same, plus facts for the port: memory map, the camera's own logs, sensor register state, internal tables, the display tables (panel type, screen shape, de-squeeze shapes) | No |
 | `open_gate_apply.cmd` | Applies the default state in four steps: open gate, then the screen at 3:2 with De-Squeeze Display set for it. Ends with one read-only session | **Yes: memory only** |
 | `open_gate_apply_no_screen.cmd` | Only the three open-gate steps | **Yes: memory only** |
+| `open_gate_apply_no_meta.cmd` | The default state with the first version's encoder step: the MP4 headers keep saying 3840 × 2160 | **Yes: memory only** |
 | `open_gate_putback.cmd` | Puts the four steps back | Yes: memory only |
 | `screen_putback.cmd` | Puts the screen step back | Yes: memory only |
+| `playback_fix_apply.cmd` | **Optional, not run on any camera.** In-camera playback of the 3840 × 2560 clips, the A7 IV's way (see "The playback step") | **Yes: memory only** |
+| `playback_fix_putback.cmd` | Puts the playback step back | Yes: memory only |
 
 Nothing in this kit writes to the camera's firmware or to its settings.
 
@@ -45,7 +58,7 @@ The macOS kit is the A7 IV kit's macOS port, carried over unchanged apart from t
 
 1. Python 3.9 or later: the one macOS offers with the Xcode Command Line Tools (run `xcode-select --install` in Terminal) works, or install it from python.org.
 2. Double-click `macos/setup.command`. It sets up Python and the USB library the scripts use. No Homebrew and no driver are needed.
-3. Each Windows launcher has a macOS twin with the same name: `macos/check_readonly.command`, `dump_info.command`, `open_gate_apply.command`, `open_gate_apply_no_screen.command`, `open_gate_putback.command`, `screen_putback.command`. Everything below that says `.cmd` works the same with the `.command` file.
+3. Each Windows launcher has a macOS twin with the same name: `macos/check_readonly.command`, `dump_info.command`, `open_gate_apply.command`, `open_gate_apply_no_screen.command`, `open_gate_apply_no_meta.command`, `open_gate_putback.command`, `screen_putback.command`, `playback_fix_apply.command`, `playback_fix_putback.command`. Everything below that says `.cmd` works the same with the `.command` file.
 
 Each live run asks for your Mac password: macOS keeps its own driver on the camera's USB connection, and only an administrator can hand the camera over to the script. The script unmounts the camera's memory card first; it does not erase anything on it. The results go to the same `windows/camera_private` folder.
 
@@ -62,6 +75,8 @@ If macOS refuses to open a .command file ("unidentified developer" or "could not
 5. When the log says **unplug and plug in again**, do that with the phone cable. Never switch the camera off.
 6. **Stop waiting** ends a wait for the camera. It never interrupts a step that is talking to the camera.
 7. Afterwards, **Export logs** writes a zip to `Download/FX3-OpenGate/` on the phone: send that zip back.
+
+**Playback fix (untested)** and **Playback put back** run the playback step and its put back (app 0.3). Like the apply, they start only after a check on this phone said READY.
 
 **Self-test** and **Dry run** need no camera and send nothing.
 
@@ -80,7 +95,7 @@ What they do to the camera: they switch it to service mode, write one small prog
 
 1. The sensor read-out and the two 4K picture records of the image processor: full sensor height instead of the 16:9 band (the A7S III's sensor step v5).
 2. One size word: 3840 × 2160 becomes 3840 × 2560.
-3. The encoder's tables for XAVC HS 4K and XAVC S 4K at 23.98p and 25p.
+3. The encoder's tables for XAVC HS 4K and XAVC S 4K at 23.98p and 25p, and (new) the two height values the MP4 writer puts in the file's headers, 2160 → 2560. `open_gate_apply_no_meta.cmd` leaves the headers at 2160, as the first version did.
 4. The screen (30 words):
    - The height of a 16:9 picture on the rear screen goes from width × 9/16 to width × 2/3. The live view is a 16:9 frame holding the whole sensor area, so this shows it at its true 3:2 shape: thin black bars above and below on a 4:3 screen, the whole screen on a 3:2 one.
    - The focus frames are told where the picture now is.
@@ -120,7 +135,7 @@ All of it is the preview only: the recorded file does not change. The camera its
 5. It runs four steps. Between steps it asks you to **unplug and replug the USB cable. Do not switch the camera off and do not pull the battery** until the script says it is finished: either one removes what was applied.
 6. After the four steps the script asks for one more session, which only reads. **Unplug USB, set Movie, look at the screen, and plug in again.** The script then runs the read-only dump by itself and prints the rear panel's type.
 7. When it says so, unplug. The live view should be the whole picture at 3:2.
-8. Record 20 to 30 seconds, stop, and play the clip back. Then try De-Squeeze Display at each setting.
+8. Record 20 to 30 seconds and stop. **Do not play it back on the camera** (see above): check it on a computer. Then try De-Squeeze Display at each setting.
 9. To return to stock: battery out for 10 seconds (or switch off and on, if it works as on the A7S III), or `open_gate_putback.cmd`.
 
 **The glitchy live view** (seen on the A7S III; the FX3 runs the same software)
@@ -136,7 +151,7 @@ So, if you see it: **start and stop a short recording.**
 **Please send back**
 
 - The zipped `windows/camera_private` folder, with the closing dump of the apply in it (it holds the rear panel's type).
-- The clip, or its properties: size, frame rate, codec. Do the same with XAVC S 4K if you can.
+- The clip, or its properties: size, frame rate, codec. Do the same with XAVC S 4K if you can. With this version: what MediaInfo says (`mediainfo --Output="Video;%Width%x%Height% original %Width_Original%x%Height_Original%" FILE` should give 3840x2560 with no "original" size), and whether Resolve or Premiere opens the original file at 3:2. ffprobe cannot show this change: it reads the size from the stream, which was always 3840 × 2560.
 - The rear screen with De-Squeeze Display Off and at each setting: a phone photo with something round in the picture helps.
 - Whether the focus frames are drawn with De-Squeeze Display Off.
 - **One check after a power-off.** When you are done: switch the camera off and on with the power switch (no battery pull), select a still mode, run `windows/check_readonly.cmd`, and include that folder. It tells us whether the power switch removes the patch on the FX3.
@@ -147,6 +162,32 @@ So, if you see it: **start and stop a short recording.**
 **If the apply stops part-way:** it says at which step. Pull the battery for 10 seconds to be sure of the camera's state, and send the folder.
 
 **To remove only the screen step:** select a still mode and run `windows/screen_putback.cmd`.
+
+## The playback step (optional, not run on any camera yet)
+
+**Why playback fails.** When the FX3 starts playing a clip, its AV code opens the video decoder at a fixed 4096 × 2160 with memory for that size. A 3840 × 2560 picture is taller than that, so playback start fails ("Unable to display"). The A7 IV runs the same code and opens the decoder at 7690 × 4320 with the 8K memory (it opens the 4K size only for one kind of clip that the FX3 does not make), and the A7 IV plays its own 3840 × 2560 clips. The A7S III's software opens it the A7 IV's way; the FX3's always opens the 4K size.
+
+**What it changes.** In the camera's memory only: in its AV code (`av-cam.bin`, which runs in the kernel), the two memory ids the decoder asks for, 4K → 8K (four instruction words; two of them are only the ids written into an error message), and one word of its decode size table, 4096 × 2160 → 7690 × 4320. The rest of that table row is already the A7 IV's.
+
+**Why it is a separate step.** Every other step of this kit changes data. This one changes instructions that the processors may hold in their caches. The step:
+
+- refuses unless every byte of that 4 KB of code is exactly as in the 7.02 firmware file, both as it reads it and as the kernel reads it;
+- reads the processors' cache type and refuses unless it can make them fetch the new instructions, and also maps the code so that the cache is reached at the address the kernel runs it from;
+- runs that cache sequence once before it writes anything: if the processor did not allow it, the step would end there with nothing changed;
+- writes the ids first and the table word last; the put back does the reverse. A 4K size with 8K memory is harmless; the other way round is not, so it never happens;
+- puts back everything it wrote if any write is not seen.
+
+The open-gate state is not needed for it, and the open-gate apply and put back leave it alone. A battery pull removes it.
+
+**How to test it**
+
+1. A still mode, connect USB, `windows/check_readonly.cmd` (VERDICT READY), then `windows/playback_fix_apply.cmd`. It asks for the firmware version and a typed YES, and runs one session.
+2. Unplug. Press the playback button and open an ordinary 16:9 clip (4K or HD) first: it should play as before.
+3. Then **one** open-gate clip. If it says "Unable to display", **do not try again** (a second try froze an FX3 before): leave playback and send the folder. If the camera freezes or restarts, pull the battery for 10 seconds.
+4. If it plays: does it show the whole 3:2 frame, and does it play to the end? Does skipping and pausing work?
+5. Put it back with `windows/playback_fix_putback.cmd`, or pull the battery.
+
+Please send the `camera_private` folder (the step's report includes the processors' cache type) and what each clip did.
 
 ## If something stops
 
@@ -161,7 +202,7 @@ Every stop prints a reason and "Nothing was sent" or what was sent. Please send 
 
 - `windows/`: the launchers, `setup.cmd`, and `tools/`:
   - the scripts, the pinned program files and their source;
-  - the four patch designs;
+  - the patch designs of every step, the playback step's included;
   - the builders and emulations of the designs (`tools/modding/fx3`).
 - `macos/`: `setup.command` and one `.command` launcher per Windows launcher; they run `windows/tools`.
 - `android/FX3-OpenGate.apk`: the phone app, carrying `windows/tools` as published here.

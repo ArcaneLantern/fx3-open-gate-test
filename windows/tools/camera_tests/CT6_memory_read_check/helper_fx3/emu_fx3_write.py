@@ -17,6 +17,7 @@ the kernel's view not following a write.
 The two rear-screen libraries (S16/S17 = levels 16/17 with lcd32dsq_fx3_v1's 30 words: the 3:2 ratio, the frame tables, the
 de-squeeze ratios and the 2.0x crop) run in the same harness, on the words of the loaded coprocessor image. There is no C19/C20.
 Safety cases: the A7S III kit's own write libraries (helper_s3, levels 5, 16 with its screen words, and 19) run on an FX3 write nothing.
+The playback decoder's two libraries (P29 / P30, readcheck.c levels 29 / 30 with avdec8k_fx3_v1) are run by emu_fx3_playback.py's cases, at the end.
 """
 import json
 import struct
@@ -26,6 +27,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 sys.path.insert(0, str(HERE.parent / "helper"))
+sys.path.insert(0, str(HERE))
 import emu_built as E  # noqa: E402
 from unicorn import arm64_const as R  # noqa: E402
 
@@ -159,7 +161,8 @@ def main():
     fail = []
     ok = lambda cond, text: (print(("PASS  " if cond else "FAIL  ") + text), fail.append(text) if not cond else None)
     lib = lambda L: (HERE / f"libJit_fx3_L{L}.so").read_bytes()
-    og, oz, fl = design("ogsq_fx3_v1"), design("outsz2560_fx3_v1"), design("ogfile2560_hs_s_fx3_v1")
+    og, oz, fl = design("ogsq_fx3_v1"), design("outsz2560_fx3_v1"), design("ogfile2560_hs_s_fx3_v2")
+    fl1 = design("ogfile2560_hs_s_fx3_v1")                  # the first kit's encoder side (N19 / N20)
     image = ex("nflasha8/cpapp-b.bin")
     allowed = allowed_sites(og, oz)
     files = E.tree()
@@ -282,7 +285,8 @@ def main():
         return bytes(b)
 
     def mp(L, av_mem, lm_mem, **wrong):
-        r = E.Run(lib(L), L, mfiles, dirs, {E.AVCAM_PHYS: av_mem}, own={LM_AT: lm_mem})
+        r = (E.Run(lib(L), L, mfiles, dirs, {E.AVCAM_PHYS: av_mem}, own={LM_AT: lm_mem}) if isinstance(L, int) else
+             E.Run((HERE / f"libJit_fx3_{L}.so").read_bytes(), int(L[1:]), mfiles, dirs, {E.AVCAM_PHYS: av_mem}, own={LM_AT: lm_mem}))
         r.kview_fail = wrong.get("kview_fail", False)
         r.stale = {E.AVCAM_PHYS + o for o in wrong.get("stale", ())}
         r.pwrite_lost = {LM_AT + o for o in wrong.get("pwrite_lost", ())}
@@ -304,6 +308,46 @@ def main():
     ok(not r.bad and a == av and m == lm0 and "NOT DONE: a step failed; every site this run touched was put back" in t, "level 19 with a libmpr.so write lost: everything put back")
     r, t, a, m = mp(19, av, lm0, stale=[sites["av-cam.bin"][3][0]])
     ok(not r.bad and a == av and m == lm0 and "NOT DONE: a step failed; every site this run touched was put back" in t, "level 19 with the kernel's view not following a write: everything put back")
+    # ---- the MP4 header heights (2026-11-25): L19 = ogfile2560_hs_s_fx3_v2 holds two code words more than the first kit's N19 (v1)
+    code = [(int(q["file_off"], 16), bytes.fromhex(q["old"]), bytes.fromhex(q["new"])) for q in fl["patches"] if q["code"]]
+    ok(len(code) == 2 and all(o[2] == 0x81 and n[2] == 0x81 for _, o, n in code), "v2's two code sites are the two movz w6 heights (2160 -> 2560)")
+    sites1 = {"av-cam.bin": [], "libmpr.so": []}
+    for q in fl1["patches"]:
+        sites1[q["binary"]].append((int(q["file_off"], 16), bytes.fromhex(q["old"]), bytes.fromhex(q["new"])))
+
+    def applied1(blob, which):
+        b = bytearray(blob)
+        for o, old, new in sites1[which]:
+            b[o:o + len(new)] = new
+        return bytes(b)
+    av1n, lm1n = applied1(av, "av-cam.bin"), applied1(lm0, "libmpr.so")
+    ok(av1n == av1 and lm1n != lm1 and sum(x != y for x, y in zip(lm1n, lm1)) <= 8, "v1 and v2 differ only in libmpr.so's two height words")
+    r, t, a, m = mp("N19", av, lm0)
+    ok(not r.bad and a == av1n and m == lm1n and "DONE" in t, "N19 (the first kit's encoder side) on a stock camera: v1's sites, the heights stay stock")
+    r, t, a, m = mp("N20", av1n, lm1n)
+    ok(not r.bad and a == av and m == lm0 and "DONE" in t, "N20: stock again, byte for byte")
+    r, t, a, m = mp(19, av1n, lm1n)
+    ok(not r.bad and a == av1 and m == lm1 and "DONE" in t and len(r.pwrites) <= 2 and not r.map_writes,
+       "L19 on a camera holding the first kit's encoder side: only the two height words are written (%d writes)" % len(r.pwrites))
+    r, t, a, m = mp(20, av1n, lm1n)
+    ok(not r.bad and a == av and m == lm0 and "DONE" in t, "L20 on a camera holding the first kit's encoder side: stock again")
+    # Why the kit's put back is always L20 and N20 is not shipped: v1's put back does not know the two height words, so on a camera holding v2 it
+    # puts back everything else and leaves the headers saying 2560 for stock 2160 recordings
+    r, t, a, m = mp("N20", av1, lm1)
+    left = bytearray(lm0)
+    for o, _, new in code:
+        left[o:o + 4] = new
+    ok(not r.bad and a == av and m == bytes(left) and "DONE" in t,
+       "N20 (not shipped) on a camera holding v2: puts back v1's sites and leaves the two heights at 2560, so the kit's put back is always L20")
+    for g in [int(x["file_off"], 16) for x in fl["libmpr_code_guards"][0]["guards"]]:
+        bad_lm = bytearray(lm0)
+        bad_lm[g] ^= 1
+        r, t, a, m = mp(19, av, bytes(bad_lm))
+        if r.bad or a != av or m != bytes(bad_lm) or r.pwrites or r.map_writes:
+            ok(False, "L19 with the code guard at %#x wrong: nothing is written" % g)
+            break
+    else:
+        ok(True, "L19 with any one of the %d instructions around the heights wrong: nothing is written" % len(fl["libmpr_code_guards"][0]["guards"]))
     # ---- rear screen and de-squeeze, coprocessor words inside the loaded image (S16, S17: lcd32dsq_fx3_v1)
     named = lambda n: (HERE / f"libJit_fx3_{n}.so").read_bytes()
     lf = design("lcd32dsq_fx3_v1")
@@ -381,6 +425,9 @@ def main():
            "the A7S III kit's L19 on an FX3: nothing is written in av-cam.bin or libmpr.so")
     else:
         print("NOTE  helper_s3's libraries are not here: the safety cases were skipped")
+    # ---- the playback decoder (P29 / P30 = levels 29 / 30 with avdec8k_fx3_v1: av-cam.bin code and data, with the instruction caches)
+    import emu_fx3_playback
+    emu_fx3_playback.cases(ok)
     print("ALL PASS" if not fail else "FAILED: %d" % len(fail))
     return 1 if fail else 0
 

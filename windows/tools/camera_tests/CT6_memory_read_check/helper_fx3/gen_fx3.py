@@ -4,7 +4,7 @@
 
 The FX3 7.02 counterpart of helper_s3/gen_s3.py (the A7S III helper, which ran on an A7S III). Everything the helper compares against
 is taken here from the extracted 7.02 update and from modding/designs/{ogsq_fx3_v1, outsz2560_fx3_v1, ogfile2560_hs_s_fx3_v1,
-lcd32dsq_fx3_v1}.json; the helper holds no other constant about the camera except the addresses listed at the top of this file.
+lcd32dsq_fx3_v1}.json (ogfile2560_hs_s_fx3_v2 since helper v2); the helper holds no other constant about the camera except the addresses listed at the top of this file.
 Differences from the A7S III helper: the FX3's addresses (modding/FX3_PORT.md; the dump's RAM pages ported by code reference with
 build/port_addr.py), and the screen design's 30 words are read as soft sites (reported, not counted), so a check also says whether the
 screen step is applied. Read-only on the inputs.
@@ -19,7 +19,7 @@ ROOT = HERE.parents[2]
 EX = ROOT / "work/extracted/fx3_702/0700_part_image/dev"
 DES = ROOT / "modding/designs"
 BASE = 0x108000
-LABEL = "fx3read_v1"
+LABEL = "fx3read_v2"                                  # v2 (2026-11-25): the encoder sites of ogfile2560_hs_s_fx3_v2 (+ the two MP4 header heights)
 CP_LO, CP_HI = 0xC0000, 0x2100000                     # coprocessor addresses a read may have: its logs (tomco.txt, the A7S III's), image and RAM tables
 AVCAM_PHYS, AVCAM_RESERVE = 0x401000000, "@0x401000000"   # kemco.txt: memrsv=0x01000000@0x401000000:ex, as on the A7S III; checked on the camera before any read
 ID_FILES = {"/libmpr.so": "nflasha15/lib/libmpr.so", "/libsencore.so": "nflasha15/lib/libsencore.so", "/libJiritsu.so": "nflasha15/lib/libJiritsu.so"}
@@ -38,7 +38,7 @@ DUMP_RANGES = (("shadow", 0xFF4000, 2), ("matrix", 0xF09000, 3), ("sizetable", 0
                ("display", 0x1DF000, 1), ("crop", 0x5FA000, 1), ("frametab", 0xD2E000, 1), ("paneltype", 0x1490000, 1), ("desqueeze", 0x10A8000, 1))
 # av-cam.bin guards: pieces of its tables that no site touches (the A7S III's, +0x77a0; the clip table +0x7780)
 UNIT, CLIP, DESC = 0x395068, 0x39335C, 0x395108
-DESIGNS = ("ogsq_fx3_v1", "outsz2560_fx3_v1", "ogfile2560_hs_s_fx3_v1", "lcd32dsq_fx3_v1")
+DESIGNS = ("ogsq_fx3_v1", "outsz2560_fx3_v1", "ogfile2560_hs_s_fx3_v2", "lcd32dsq_fx3_v1")
 
 
 def c_bytes(b):
