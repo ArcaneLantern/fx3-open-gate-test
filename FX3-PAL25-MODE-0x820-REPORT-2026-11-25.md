@@ -12,6 +12,7 @@ These are physical results from the same separate, locally instrumented implemen
 - **The same design on mode 10's rows, with a 25 fps timing row, gives open gate at 25p.** 3840 × 2560, full sensor field, 25.00 fps, including one continuous take of 13 min 41 s.
 - **Two instruction words that set the height in `tkhd` and the `stsd` entry were run on the camera.** The unmodified card files import into Premiere Pro as 3840 × 2560.
 - **Entering Movie from a still mode after the apply is unreliable on this camera**: two of four attempts ended in a flickering picture and a restart.
+- **Applying with the camera left in Movie avoids that** (one attempt so far): no flicker, no restart, and a good 3840 × 2560 clip, here in S-Log3.
 
 ## What went wrong with the 0x8c0 design at 25p
 
@@ -127,13 +128,20 @@ All applies were made in a still mode after a cold start. After the last USB ses
 | 3 | yes | the same |
 | 4 | no | worked; worked again after a read-only session; `YM_1706` recorded |
 
-The card held open-gate clips in all four. Same lens in all four. After each restart a cold-start check found every managed site at its stock value. The cause is not established; the coprocessor log was not read. Issue 2's note that the apply works with the camera left in Movie was not tried here.
+The card held open-gate clips in all four. Same lens in all four. After each restart a cold-start check found every managed site at its stock value. The cause is not established; the coprocessor log was not read.
+
+**Applying in Movie (added later the same day).** Following issue 2's note, the same 210 sites were applied once with the camera started cold, set to Movie (exposure mode M) and never taken out of it: three write sessions, all with preimage checks and readback passing. So the stored record of mode 10 and its cells were changed while that mode was the active one.
+
+- The playback screen again opened by itself after every USB session. After the last one it was left with one key press and the camera was in Movie with a normal picture: no flicker, no restart.
+- `YM_1707.MP4`: 456 frames, 18.24 s, 3840 × 2560, AVC High 4:2:2 10-bit, 25/1, full decode passes, `tkhd` / `avc1` 2560, no empty rows, no colour cast. Recorded in S-Log3 (XML `s-log3-cine`); the earlier clips were Rec.709. Field of view not measured for this clip.
+- One attempt only. SHA-256 `6e897beb…8dbd`.
 
 ## Suggested maintainer follow-up
 
 - Say in the README that at 25p (PAL) the 0x8c0 sensor step gives a stretched 16:9 picture, until a 0x820 step exists.
 - Consider a mode-10 variant of the sensor step from the table above; the timing row and the read-out frame-length field are the only cells that are not copies.
 - Check the level byte of `avcC` / `hvcC` in the first v2 card file.
-- Keep the "do not play back" warning: on this camera the playback screen also seems to matter before the first entry into Movie.
+- Keep the "do not play back" warning. On this camera the two restarts came after the playback screen had opened before the first entry into Movie; with the apply made in Movie the same playback screen did no harm.
+- Consider making "apply in Movie" the documented way, as issue 2 suggests: it worked here at 25p too.
 
 The footage, reference photos, firmware binaries and device-identifying logs are not part of this contribution.
