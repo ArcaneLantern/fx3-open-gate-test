@@ -230,6 +230,30 @@ Left stock: the fit words, the 17:9 ratios, and the HDMI manual-layout copy (0x1
 
 **qemu-arm cross-check** (`build/lcd_fx3_qemu.py`, in WSL). The two calculators and the fit function ran natively under qemu-arm 10.2.1: 104 cases. All 10 rectangles of the Unicorn run matched exactly, and the shapes the design leaves alone came out unchanged.
 
+## A library left on the camera blocked every later run (found and fixed 2026-11-26)
+
+**Report.** An FX3 tester (macOS) could not apply any more, also after a cold boot: step 1 (L5) and the read-only dump both stopped with "a libJit.so is already on the service partition (25960 bytes, it is NOT this script's library) ... It is left alone".
+
+**What it was.** The dump session's transcript holds the SHA-256 of the camera's answer (status word + file), `3f74e37f…`. It equals that of this kit's own L19 library (`c028f58c…`, 25,960 bytes). So an earlier L19 session sent its library and was cut off before deleting it. The service partition (`/tmp/jiritsu`) is flash, so the file outlives a cold boot. It is not loaded again by itself, and the camera was otherwise normal: the login and the known-answer read passed, and nothing was written in the stopped sessions.
+
+**Why every run stopped.** The runner compared the file on the camera with the current step's library only. Every step has its own library, so a file left by one step was foreign to all the others, the read-only ones included. The one way out (`fx3_run.py L19 --remove-only --go --writes-memory --firmware-shown 7.02`) had no launcher, and the message did not say which step the file belonged to.
+
+**The fix** (scripts only; no library was rebuilt, every pin is unchanged):
+- The shared runner has a list of the calling kit's libraries (`ct6_level1_run.KNOWN_LIBS`, empty for the other kits: nothing changes for them). A file on the camera whose SHA-256 is in the list is deleted with the same command every session already ends with, the delete is confirmed by a read, and the run goes on.
+- `fx3_run.py` lists all 15 current libraries and the 3 the first kit published and later kits replaced (its L20, check and dump).
+- A file that is none of them is still left alone. The message now shows its SHA-256, and `--remove-library <SHA-256>` deletes exactly that file.
+- `--remove-only` deletes any library of the kit, not only the named step's.
+- `fx3_apply.py`: a stop at step 1 no longer says "Steps before it are applied", and a stop that may have left the library says the next run removes it.
+
+**Checked** (`evidence/fx3/leftover_2026-11-26/`):
+- Replay on the simulated camera with the L19 library on the service partition: the runner as published stops with the tester's message for L5, check, dump and I19; with the fix each deletes the file, then makes its normal run (one write, loaded once, gone afterwards).
+- Each library's `--selftest` has 8 more cases: another step's library or its own left behind, a file the camera will not delete (stops before the write), `--remove-library` with the right and a wrong SHA-256, `--remove-only`, and the list itself.
+- The A7 IV runner's own self-test prints the same 29 lines before and after; the A7S III, ZV-E1, FX2, FX30 and FX6 runners' self-tests pass.
+
+**Not known.** Why that L19 session was cut off: its folder was not sent. **Not run on a camera:** the delete of a left library (the command itself is the one every session sends).
+
+**The other kits** that use this runner have the same dead end; they do not have the list yet.
+
 ## The kit
 
 - **Helpers.** `helper_fx3/fx3read.c` is `s3read.c` with text changes only. The write libraries are the A7 IV helper's levels 5/6, 16/17 and 19/20, which ran on the A7S III, with the FX3's tables. The optional playback step is the new levels 29/30 (above). Level 5 follows the sensor object 0x127ab68 → control +0x698 → the drive-parameter object.
@@ -254,6 +278,7 @@ Library pins (2026-11-25): check `6f99aef2`, dump `fdb83bfe` (`fx3read_v2`), L5 
 
 - Whether the v2 headers change anything on the camera beyond the file (they did not on the A7 IV), and whether editors then open the original files at 3:2.
 - **XAVC S-I 4K:** built and emulated, not run (see its section above).
+- **Why a tester's L19 session was cut off** and left its library on the camera (2026-11-26, see its section above).
 - **In-camera playback:** the cause is found and the playback step is built and emulated, not run (see "The playback step" above). Until it is tested, testers are told not to play clips back.
 - What made the first apply run unreliable for tester 1. The dumps show no fault, and the camera was started afresh between the two runs.
 - What the A7S III left open: the glitchy live view on entering movie mode from stills, exposure and autofocus, 60p (crashed the A7S III), PAL.

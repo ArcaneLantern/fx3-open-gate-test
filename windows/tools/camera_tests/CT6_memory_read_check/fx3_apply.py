@@ -187,6 +187,14 @@ def movie_session():
     say("    corrects it until the next visit to stills). The cause is not known.")
 
 
+def left_behind():
+    """True if the newest session sent its library and did not confirm it deleted (cut off, or the delete got no answer)."""
+    for _, man in sessions():
+        out = man.get("results", {}).get("ct6", {})
+        return bool(out.get("library_sent")) and out.get("library_on_camera_after") is not False
+    return False
+
+
 def step_outcome():
     for _, man in sessions():
         f = man.get("results", {}).get("ct6", {}).get("result", {}).get("s3")
@@ -283,7 +291,13 @@ def main():
         if rc or which != k or not f or not f.get("ok"):
             say()
             say("STOPPED at step %d (%s): %s" % (n, k, "the session did not finish" if rc or which != k or not f else "outcome " + f["outcome"]))
-            say("Steps before it are %s. To be sure of the camera's state: cold boot it (battery out for 10 seconds)." % ("applied" if applying else "put back"))
+            if n == 1:
+                say("No earlier step of this run was %s. To be sure of the camera's state: cold boot it (battery out for 10 seconds)." % ("applied" if applying else "put back"))
+            else:
+                say("Steps before it are %s. To be sure of the camera's state: cold boot it (battery out for 10 seconds)." % ("applied" if applying else "put back"))
+            if left_behind():
+                say("This step's library may still be on the camera's service partition (a cold boot does not remove it). It is not loaded again")
+                say("  by itself, and the next run of any launcher of this kit deletes it before doing anything else.")
             say("Please send the newest folders in camera_private.")
             raise SystemExit(1)
     say()

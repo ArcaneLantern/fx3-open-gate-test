@@ -32,10 +32,17 @@ FUNCS = {"a7iv_602": {"config": 0x222B18, "stsd": 0x2240CC, "prof": 0x225DB8, "s
          # FX2 1.01 (2026-11-25): the A7 IV's writer moved by -0x37b4 (modding/FX2_PORT_ENCODER.md); first segment 0x2e465c bytes
          "fx2_101": {"config": 0x21F364, "stsd": 0x220918, "prof": 0x222604, "span": 0x2E5000},
          # A7C II 2.01 (2026-11-25): the A7 IV's writer moved by -0x390c (build/mp4_meta_sites.py SHIFTED); first segment 0x2e4534 bytes
-         "a7c2_201": {"config": 0x21F20C, "stsd": 0x2207C0, "prof": 0x2224AC, "span": 0x2E5000}}
+         "a7c2_201": {"config": 0x21F20C, "stsd": 0x2207C0, "prof": 0x2224AC, "span": 0x2E5000},
+         # FX30 6.01 (2026-11-26): the FX3's writer 0x2c higher (modding/FX30_PORT_ENCODER.md); first segment 0x2e195c bytes
+         "fx30_601": {"config": 0x21FEF0, "stsd": 0x221490, "prof": 0x22313C, "span": 0x2E2000}}
 # what main_other() writes for each build (the FX3's text is the one its evidence was first written with)
 OTHER = {"fx3_702": {"name": "FX3 7.02", "design": "ogfile2560_hs_s_fx3_v2", "dst": "evidence/fx3/mp4_meta_emu_fx3.json"},
-         "fx2_101": {"name": "FX2 1.01", "design": "ogfile2560_hs_s_fx2_v2", "dst": "evidence/fx2/mp4_meta_emu_fx2.json"}}
+         "fx2_101": {"name": "FX2 1.01", "design": "ogfile2560_hs_s_fx2_v2", "dst": "evidence/fx2/mp4_meta_emu_fx2.json"},
+         "fx30_601": {"name": "FX30 6.01", "design": "ogfile2560_hs_s_fx30_v2", "dst": "evidence/fx30/encoder/mp4_meta_emu_fx30.json"}}
+# A1 II 4.00 (2026-11-26, modding/A1M2_PORT_ENCODER.md): the A7 IV's writer moved by +0x15c4 (build/mp4_meta_sites.py SHIFTED); first segment
+# 0x2e9814 bytes. main_other() checks the 3840x2560 heights against the A7 IV's stock writer.
+FUNCS["a1m2_400"] = {"config": 0x222B18 + 0x15C4, "stsd": 0x2240CC + 0x15C4, "prof": 0x225DB8 + 0x15C4, "span": 0x2EA000}
+OTHER["a1m2_400"] = {"name": "A1 II 4.00", "design": "ogfile2560_hs_s_a1m2_v2", "dst": "evidence/a1m2/encoder/mp4_meta_emu_a1m2.json"}
 OBJ, REQ, OUT, STACK, RET = 0x10000000, 0x10001000, 0x10002000, 0x10100000, 0x10200000
 
 

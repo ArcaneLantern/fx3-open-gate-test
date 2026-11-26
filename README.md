@@ -203,7 +203,9 @@ Every stop prints a reason and "Nothing was sent" or what was sent. Please send 
 - *the camera is in service mode but that device has no libusb driver yet*: expected on the first run. Do the Zadig step for the new device and run again.
 - *DeviceInfo.xml is not the file of the 7.02 update*: another firmware or model. Nothing further is sent.
 - *DIFFERS from the 7.02 update* in a check: not an FX3 on 7.02 (an A7S III gives this too). The apply will not start.
-- *a libJit.so is already on the service partition*: a session broke half-way. Replug, and run the same step with `--remove-only`.
+- *A library from an earlier session is still on the service partition ... Deleting it now*: an earlier session was cut off after it sent its program file (the camera restarted, the cable came out, Ctrl+C), so the file stayed on the camera. A cold boot does not remove it, but the camera does not load it again by itself. Every launcher now deletes such a file of this kit first and carries on: nothing to do.
+- *a libJit.so is already on the service partition ... it is NOT this script's library ... It is left alone*, from a copy of this kit older than 2026-11-26: the same thing, before that fix (one FX3 could not be patched any more because of it). Update the kit and run any launcher, for example `check_readonly`.
+- *a libJit.so is already on the service partition ... none of this kit's libraries*: a file another tool left there. It is left alone and its SHA-256 is printed. If you know what it is, `check_readonly.cmd --remove-library <that SHA-256>` (macOS: `./check_readonly.command --remove-library <that SHA-256>`) deletes it and then makes the check.
 
 ## What is in here
 

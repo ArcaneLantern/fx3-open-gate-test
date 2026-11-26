@@ -51,13 +51,21 @@ PROFILE_SITES = [
 OTHER_BUILDS = {"fx3_702": {"avc_h": (0x21FF3C, ("mov", "w6, #0x870"), "MP4 track height, XAVC S 4K (AVC)"),
                             "hevc_h": (0x220074, ("mov", "w6, #0x870"), "MP4 track height, XAVC HS 4K (HEVC)")},
                 "fx2_101": {"avc_h": (0x21F3DC, ("mov", "w6, #0x870"), "MP4 track height, XAVC S 4K (AVC, combs 0, 2)"),
-                            "hevc_h": (0x21F428, ("mov", "w6, #0x870"), "MP4 track height, XAVC HS 4K (HEVC, combs 5, 7)")}}
+                            "hevc_h": (0x21F428, ("mov", "w6, #0x870"), "MP4 track height, XAVC HS 4K (HEVC, combs 5, 7)")},
+                # FX30 6.01 (2026-11-26, modding/FX30_PORT_ENCODER.md): the FX3's writer 0x2c higher (track config 0x21fef0, stsd entry 0x221490,
+                # PROF entry 0x22313c, tkhd 0x22348c, profile id 0x222ac0, pixel aspect 0x2230b4, level label 0x21fafc: each the FX3's whole body,
+                # branch targets and page offsets aside).
+                "fx30_601": {"avc_h": (0x21FF68, ("mov", "w6, #0x870"), "MP4 track height, XAVC S 4K (AVC)"),
+                             "hevc_h": (0x2200A0, ("mov", "w6, #0x870"), "MP4 track height, XAVC HS 4K (HEVC)")}}
 
 
 # A7C II 2.01 (2026-11-25): the A7 IV's writer moved as one block by -0x390c (track config 0x21f20c, stsd entry 0x2207c0, PROF entry 0x2224ac,
 # tkhd 0x2227fc, profile id 0x221df0, pixel aspect 0x222424); every site found by 32 bytes of context, unique, same instruction. Both sizes
 # (3840x2560 and 5760x3840), as on the A7 IV. Checked by build/emu_mp4_meta.py --build a7c2_201.
 SHIFTED = {"a7c2_201": -0x390C}
+# A1 II 4.00 (2026-11-26, modding/A1M2_PORT_ENCODER.md): the A7 IV's writer moved by +0x15c4 (track config 0x2240dc, stsd entry 0x225690, PROF entry
+# 0x22737c); all seven size sites found by 68 bytes of context, unique, the same instruction. Checked by build/emu_mp4_meta.py --build a1m2_400.
+SHIFTED["a1m2_400"] = 0x15C4
 
 
 def sites(width, height, build="a7iv_602"):

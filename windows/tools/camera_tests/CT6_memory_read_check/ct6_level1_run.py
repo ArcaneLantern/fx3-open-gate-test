@@ -366,6 +366,27 @@ DESIGN_LIBS = {"fhband_v1": {5: ("libJit_level5_fhband_v1.so", "982d2ea9d8916246
                "ogfilesi57_v1": {18: ("libJit_level18_ogfilesi57_v1.so", "9fc7153d68f4631edb1c03256c2b13cc6553d9beff0718fdf92b50f97480be07"),
                                  19: ("libJit_level19_ogfilesi57_v1.so", "62fa8f86f367255dde5f9924b15b7204dc30233072538d7a43673e047e04b5d9"),
                                  20: ("libJit_level20_ogfilesi57_v1.so", "d8dd845b2854c5d9b64d0e8371861bb2cdd27a962c52724f6f0a5aa84560f54c")},
+               # The HEVC variants of the 5.7K S-I step (2026-11-25; build/build_ogfile_sih.py; the owner: "make it use HEVC in S-I mode (so I
+               # frames only)"), INSTEAD of ogfilesi57_v1 after ogfile57r300m1_v4 (each refuses while another is applied). libmpr: comb row 9 codec
+               # AVC -> HEVC + 5760x3840 and its MP4 track-config case -> row 7's (hvc1); av-cam: S-I descriptors #113/#114/#116/#117 -> HEVC
+               # two-core landing channels, keys -> Sony's dormant 5760x3240 HEVC 4:2:2 profiles 101000/100901, rewritten as intra profiles.
+               # ogfilesih57_v1: PredMode 0, M 0, N 1, 10,080,256 bits a picture, rate fields 0 (32 sites). ogfilesih57p1_v1 (fallback): PredMode 1,
+               # M 1, N 1, Sony's 300 Mbps figures (28 sites). Not run on a camera.
+               "ogfilesih57_v1": {18: ("libJit_level18_ogfilesih57_v1.so", "3bcfced0b6fdd2632c0ce24dab31a6855d82e27e946873367a0ae1fac8546bd3"),
+                                  19: ("libJit_level19_ogfilesih57_v1.so", "d7427d2c895a52fa2b16e7d48aecb8fa3f0de67b192f8274e0b175a11387be98"),
+                                  20: ("libJit_level20_ogfilesih57_v1.so", "3c2b5477c10e418c8522589d970a371ffe429d2180ca42678c1fe69b2ac5a421")},
+               "ogfilesih57p1_v1": {18: ("libJit_level18_ogfilesih57p1_v1.so", "e668242b03afbcf73941fec1d4ec44645c83ac382cef898fb7486c6a5a0368ca"),
+                                    19: ("libJit_level19_ogfilesih57p1_v1.so", "0c605aea3853809c23c0c8da53756d4c31711b77262d96db376a210392f6d095"),
+                                    20: ("libJit_level20_ogfilesih57p1_v1.so", "899a56332e02ac201f127ba4c15e5540ef05f206258d9ae74e618c0c6c3e06e5")},
+               # After F1017 (p1 records, but its long-GOP rate control keeps a 10-picture cycle), two bisection variants on p1's channel, each with
+               # about 300 Mb/s as bits per picture (12,513,280 at 23.98p, 12,001,280 at 25p): p2 = the intra rate-control set-up of AVC S-I / HEIF
+               # (M 0, N 1, rate fields 0, +0x58 budget); p3 = p1 plus the +0x58 budget. Not run on a camera.
+               "ogfilesih57p2_v1": {18: ("libJit_level18_ogfilesih57p2_v1.so", "8f2c278ef7876e54d7786dcd3cacac13153a94530dd2532b19dd41d0ab1de781"),
+                                    19: ("libJit_level19_ogfilesih57p2_v1.so", "5c62681a84ed6884e36a5acc9b175de91b1782c9a64246674bcd6af1cd46ef7f"),
+                                    20: ("libJit_level20_ogfilesih57p2_v1.so", "ebfa4cbeb3b5e5c0ef62a049122c4d942bf0dd046cebe157d95f8a25b1b8b7b5")},
+               "ogfilesih57p3_v1": {18: ("libJit_level18_ogfilesih57p3_v1.so", "3bcf4066e30f219179f9c6a0c05ff035d85fbb67c6c5b26ce6c75bbd03d1d739"),
+                                    19: ("libJit_level19_ogfilesih57p3_v1.so", "4266fef9a657418aee507751f307d0daf3878a3dce9b41b044455efe1ff98ab8"),
+                                    20: ("libJit_level20_ogfilesih57p3_v1.so", "afcd051c49614ba64f558811da424e075c65df6120da0959998b99e30bf206de")},
                # ogfile69_v1 (2026-11-20; build/build_og57.py --raster 6912 2880): the same 209 sites for a 6912x2880 picture (2.4:1): rows for the
                # first core 1440, +0x4c 10368, Level 6. The codec's own calculation asks less memory than for 5760x3840. Not run on a camera.
                "ogfile69_v1": {18: ("libJit_level18_ogfile69_v1.so", "15bccab5d034cabaf90b153c1e288193456a57a9dc1d01c774dbc323633dcdc3"),
@@ -499,6 +520,10 @@ def rules(lib):
 
 
 GUARDS = []                                        # the guard of the current session is the last one
+# Libraries of the calling kit, SHA-256 -> name. A session that is cut off after its write (camera restart, cable, Ctrl+C) leaves its library on
+# the service partition, which is flash: it is still there after a cold boot, and every later step, having another library, refused to go on
+# (an FX3 tester, 2026-11-26). A file whose hash is listed here is deleted and the run goes on. Empty (this script by itself): nothing changes.
+KNOWN_LIBS = {}
 
 
 class Guard(c.ServiceGuard):
@@ -618,6 +643,20 @@ def remove(session, camera, out):
     else:
         session.say("!! THE LIBRARY MAY STILL BE ON THE SERVICE PARTITION (/tmp/jiritsu/libJit.so). It is not loaded again by itself "
                     "(F409: only with /tmp/jmode set). Cold boot the camera, then run this script with --remove-only.")
+
+
+def remove_leftover(session, camera, out, data):
+    """Delete a library an earlier session left behind (its hash is in KNOWN_LIBS) and confirm; stops if it is still there."""
+    sha = c.sha256(data)
+    session.say("A library from an earlier session is still on the service partition: %s (%d bytes, SHA-256 %s...)." % (KNOWN_LIBS[sha], len(data), sha[:16]))
+    session.say("That session was cut off before it could delete it. It is not loaded again by itself. Deleting it now.")
+    left = {}
+    remove(session, camera, left)
+    gone = left.get("library_on_camera_after") is False
+    out["leftover_removed"] = {"sha256": sha, "name": KNOWN_LIBS[sha], "bytes": len(data), "remove_status": left.get("remove_status"), "gone": gone}
+    if not gone:
+        raise c.StopTest("the library an earlier session left on the service partition (%s) could not be deleted (%s). Nothing was written."
+                         % (KNOWN_LIBS[sha], text(left.get("remove_status"))))
 
 
 def check_result(data):
@@ -1071,11 +1110,16 @@ def body_run(session, camera, lib):
     out = session.results["ct6"] = {"library_bytes": len(lib), "library_sha256": LIB_SHA256, "library_sent": False}
     known_answer(session, camera)
     there, data = read(camera, LIB_PATH)
+    if there and c.sha256(data) in KNOWN_LIBS:      # left by an earlier session of this kit: delete it, then go on
+        remove_leftover(session, camera, out, data)
+        there = False
     if there:
         ours = c.sha256(data) == LIB_SHA256
         raise c.StopTest("a libJit.so is already on the service partition (%d bytes, %s). Nothing was written. %s"
                          % (len(data), "it is this script's library from an earlier run" if ours else "it is NOT this script's library",
-                            "Use --remove-only." if ours else "It is left alone."))
+                            "Use --remove-only." if ours else "It is left alone." if not KNOWN_LIBS else
+                            "It is none of this kit's libraries (SHA-256 %s) and is left alone. To delete it, run the read-only check with --remove-library and that SHA-256."
+                            % c.sha256(data)))
     there, old = read(camera, RESULT_PATH)
     if there and CLEAR_SHA and c.sha256(old) == CLEAR_SHA:          # --clear-result: it is a result already saved here; delete it and go on
         session.say("An earlier result is on the RAM disk and is the one already saved here (%d bytes). Deleting it." % len(old))
@@ -1366,6 +1410,10 @@ def body_remove_only(session, camera, lib):
     if not there:
         out["library_on_camera_after"] = False
         session.say("There is no /tmp/jiritsu/libJit.so on the camera. Nothing to remove.")
+        return
+    if c.sha256(data) in KNOWN_LIBS:               # any library of the calling kit, not only this step's
+        remove_leftover(session, camera, out, data)
+        out["library_on_camera_after"] = False
         return
     if c.sha256(data) != LIB_SHA256:
         raise c.StopTest("the libJit.so on the camera (%d bytes) is not this script's library. It is left alone." % len(data))
@@ -1835,9 +1883,9 @@ def main():
     parser.add_argument("--level", type=int, choices=sorted(set(LIBS) | {13, 14, 16, 17, 18, 19, 20, 23, 24, 25, 31}), default=1, help="which pinned build to use (default 1)")
     parser.add_argument("--design", choices=["og4k_data_v1"] + sorted(DESIGN_LIBS), default="og4k_data_v1",
                         help="for levels 5, 6 and 8: whose site table (default og4k_data_v1); for levels 13 and 14: dmmwb4080_v1 or dmmwb4688_v1; "
-                             "for levels 16 and 17: outsz2560_v1, og2560e4_v1, og57cp_v1, og57cp_v2, og57cp_v3, dmmslot8_v1, dmmslot8_v2 or lcdfill_v1; for level 18: ogfile2560_hs_v1, ogfile2560_s_v1, ogfile2560_hs_s_v1, ogfile2560_hs_s_v2, ogfile57_v1, ogfile57r300_v1, ogfile57r300m1_v1, ogfile57r300m1_v2, ogfile57r300m1_v3, ogfile57r300m1_v4, ogfilesi2560_v1 or ogfilesi57_v1; "
+                             "for levels 16 and 17: outsz2560_v1, og2560e4_v1, og57cp_v1, og57cp_v2, og57cp_v3, dmmslot8_v1, dmmslot8_v2 or lcdfill_v1; for level 18: ogfile2560_hs_v1, ogfile2560_s_v1, ogfile2560_hs_s_v1, ogfile2560_hs_s_v2, ogfile57_v1, ogfile57r300_v1, ogfile57r300m1_v1, ogfile57r300m1_v2, ogfile57r300m1_v3, ogfile57r300m1_v4, ogfilesi2560_v1, ogfilesi57_v1, ogfilesih57_v1, ogfilesih57p1_v1, ogfilesih57p2_v1 or ogfilesih57p3_v1; "
                              "for levels 19 and 20: ogfile2560_hs_v1, ogfile2560_hs_s_v1, ogfile2560_hs_s_v2, ogfile57_v1, ogfile57r300_v1, ogfile57r300m1_v1, ogfile57r300m1_v2, ogfile57r300m1_v3, ogfile57r300m1_v4, "
-                             "ogfilesi2560_v1 or ogfilesi57_v1 (the XAVC S-I 4K step, after the state's own)")
+                             "ogfilesi2560_v1, ogfilesi57_v1, ogfilesih57_v1, ogfilesih57p1_v1, ogfilesih57p2_v1 or ogfilesih57p3_v1 (the XAVC S-I 4K step, after the state's own)")
     parser.add_argument("--firmware-shown")
     parser.add_argument("--library-sha256", help="the SHA-256 of the library you reviewed; must equal the pinned one")
     args = parser.parse_args()

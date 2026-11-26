@@ -91,6 +91,15 @@ SIZES_BY_BUILD = {
                                                      "fx3_apply.py apply",
                                         "after": "ogfile2560_hs_s_fx3_v2"}},
 }
+# A1 II 4.00 (2026-11-26, modding/A1M2_PORT_ENCODER.md): the 3840x2560 design only. Tables as build_ogfile.OTHER_BUILDS["a1m2_400"]; m_vpcSt found by
+# content (the A7 IV's 14 rows at 0x2e8a50, once). The A1 II's matcher 0x234acc scans from index 0 (the A7 IV's from 3 when request +0x74 is 0);
+# the S-I descriptors sit at 110+, so first_match() answers the same.
+VPCS["a1m2_400"] = 0x2E8A50
+SIZES_BY_BUILD["a1m2_400"] = {"ogfilesi2560_a1m2_v1": {"raster": (3840, 2560), "shape": "ogfile2560_hs_s_a1m2_v1",
+                                                       "goes_with": "the A1 II kit's 3840x2560 open-gate state (its sensor, output size and raw-buffer steps "
+                                                                    "in coprocessor RAM; ogfile2560_hs_s_a1m2_v2 or _v1 on the main processor), applied as "
+                                                                    "one more level 19 step after it",
+                                                       "after": "ogfile2560_hs_s_a1m2_v2"}}
 WHY = ("the owner asked for a test script that applies the same open gate (3840x2560 and 5760x3840) to XAVC S-I 4K (2026-11-25); this is its "
        "encoder side")
 
@@ -275,6 +284,14 @@ def main():
             out["while_applied"][3] = ("the MP4 headers say what the kit's step L19 makes them say for AVC 3840-wide formats (%dx%d with ogfile2560_hs_s_fx3_v2; "
                                        "3840x2160 with --no-meta, the first kit's v1); Sony's XML says 3840x2160" % (W1, H1))
             out["status"] = "built from the FX3 7.02 files and emulated on its own code (build/emu_ogfilesi_fx3.py); never run on an FX3 or on an A7 IV"
+        elif BUILD == "a1m2_400":                         # the A1 II's words (2026-11-26)
+            out = {**{"build": BUILD, "camera": "ILCE-1M2 (A1 II), firmware 4.00"}, **out}
+            out["level"] = "the stock level bytes are kept (51, Level 5.1), as the A1 II's ogfile2560_hs_s_a1m2_v1 / v2 keep XAVC S 4K's"
+            out["memory"]["unit_type"] = ("4 (intra above 8,847,360 pixels; the A1 II's memory function 0x22c9e8, the A7 IV's logic recompiled, emulated in "
+                                          "build/run_ogfile_emu_a1m2.py)")
+            out["while_applied"][3] = ("the MP4 headers say what the kit's encoder step makes them say for AVC 3840-wide formats (%dx%d with "
+                                       "ogfile2560_hs_s_a1m2_v2; 3840x2160 with its v1); Sony's XML says 3840x2160" % (W1, H1))
+            out["status"] = "built from the A1 II 4.00 files and emulated on its own code (build/run_ogfile_emu_a1m2.py); never run on an A1 II"
         out_dir.mkdir(exist_ok=True)
         (out_dir / f"{d.name}.json").write_text(json.dumps(out, indent=1) + "\n", encoding="utf8", newline="\n")
         for b, ps in by.items():

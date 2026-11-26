@@ -71,6 +71,21 @@ WRITE_STEPS = {
 PINS.update({k: v[:2] for k, v in WRITE_STEPS.items()})
 LEVELS.update({k: {"L": 200, "S": 300, "N": 500, "P": 600, "I": 700}[k[0]] + int(k[1:]) for k in WRITE_STEPS})
 WHICH = "check"
+# Libraries this kit published before and no longer runs. With PINS they are the files a run may delete from the camera's service partition
+# when an earlier session left one behind (R.KNOWN_LIBS; on 2026-11-26 an FX3 tester's cut-off L19 session blocked every later run).
+EARLIER_LIBS = {
+    "6ca3ee7df282bda70bc50bb4f9284ccc622c2c20e6ab64b964a949148a33d836": "the first kit's L20 (put back of ogfile2560_hs_s_fx3_v1)",
+    "fcf97a8ea56abee543734779b8cac10267b4b33adda863a4032c11436e6d78ce": "the first kit's read-only check (fx3read_v1)",
+    "ad2bae7922865dd7faf3bce59aa4114e53fe56ce4366b133c96ce91414592527": "the first kit's read-only dump (fx3read_v1)",
+}
+EXTRA_LIBS = {}                                   # --remove-library: one more file, named by its SHA-256 on the command line
+
+
+def known_libs():
+    out = {sha: "this kit's %s library (%s)" % ("read-only " + k if k in ("check", "dump") else "step " + k, name) for k, (name, sha) in PINS.items()}
+    out.update(EARLIER_LIBS)
+    out.update(EXTRA_LIBS)
+    return out
 
 
 def write_result(data):
@@ -317,6 +332,7 @@ def use(which):
         raise SystemExit("%s is not in this kit%s. Nothing was sent." % (name, " (the write steps are not published yet)" if which in WRITE_STEPS else ""))
     R.LEVEL, R.DESIGN, R.LIB, R.LIB_SHA256 = LEVELS[which], "og4k_data_v1", S3 / name, sha
     R.check_result, R.known_answer, R.run_helper, R.make_sim = check_result, known_answer, run_helper, make_sim
+    R.KNOWN_LIBS = known_libs()
     c.EXPECTED_FIRMWARE = FIRMWARE
     return R.library()
 
@@ -365,6 +381,35 @@ def selftest(lib):
     check(stopped and len(R.sent(s)) == 2, "another DeviceInfo.xml: stops after the known-answer read")
     s, sim, stopped = R.simulate(lib, R.body_run, fault="load")
     check(stopped and R.sent(s).count(D) == 1 and R.LIB_PATH.decode() not in sim.fs, "a camera that cannot load the library: it is still deleted")
+    # a library an earlier session left on the service partition (it survives a cold boot): one of this kit's is deleted and the run goes on
+    lp = R.LIB_PATH.decode()
+    other = next((S3 / n).read_bytes() for k, (n, sha) in sorted(PINS.items()) if k != WHICH and (S3 / n).is_file())
+    for left, what in ((other, "another step's library"), (lib, "this step's own library")):
+        s, sim, stopped = R.simulate(lib, R.body_run, files={lp: left})
+        names, lr = R.sent(s), s.results["ct6"].get("leftover_removed") or {}
+        check(not stopped and not sim.unexpected and names.count(D) == 2 and names.count(W) == 1 and names.index(D) < names.index(W) and lp not in sim.fs
+              and sim.loads == 1 and lr.get("gone") and lr.get("sha256") == c.sha256(left) and s.results["ct6"]["library_on_camera_after"] is False,
+              "%s left on the camera: deleted first, then the normal run (one write, loaded once, gone afterwards)" % what)
+    s, sim, stopped = R.simulate(lib, R.body_run, files={lp: other}, fault="sticky")
+    check(stopped and W not in R.sent(s) and R.sent(s).count(D) == 1 and sim.fs.get(lp) == other, "a left library the camera will not delete: stops, nothing written")
+    named = b"a file named with --remove-library"
+    saved = dict(R.KNOWN_LIBS)
+    try:
+        R.KNOWN_LIBS[c.sha256(named)] = "the file named with --remove-library"
+        s, sim, stopped = R.simulate(lib, R.body_run, files={lp: named})
+        check(not stopped and R.sent(s).count(D) == 2 and R.sent(s).count(W) == 1 and lp not in sim.fs, "--remove-library with the file's SHA-256: deleted, then the normal run")
+        s, sim, stopped = R.simulate(lib, R.body_run, files={lp: named + b"!"})
+        check(stopped and W not in R.sent(s) and D not in R.sent(s) and c.sha256(named + b"!") in stopped, "--remove-library with another SHA-256: stops, nothing deleted, the file's SHA-256 is shown")
+    finally:
+        R.KNOWN_LIBS.clear()
+        R.KNOWN_LIBS.update(saved)
+    s, sim, stopped = R.simulate(lib, R.body_remove_only, files={lp: other})
+    check(not stopped and R.sent(s).count(D) == 1 and W not in R.sent(s) and lp not in sim.fs and s.results["ct6"]["library_on_camera_after"] is False,
+          "--remove-only: deletes another step's library of this kit too, writes nothing")
+    s, sim, stopped = R.simulate(lib, R.body_remove_only, files={lp: b"someone else's"})
+    check(stopped and D not in R.sent(s) and lp in sim.fs, "--remove-only: leaves a file that is none of this kit's")
+    check(set(EARLIER_LIBS) <= set(R.KNOWN_LIBS) and all(sha in R.KNOWN_LIBS for _, sha in PINS.values()) and not set(EARLIER_LIBS) & {sha for _, sha in PINS.values()},
+          "every library of this kit, current (%d) and earlier (%d), is one a run may delete" % (len(PINS), len(EARLIER_LIBS)))
     check(len(R.refusals(lib)) == 15, "the guard refuses the 15 listed packets (changed library, other paths, backup, flash and debug writes ...)")
     return done
 
@@ -463,11 +508,17 @@ def main():
     ap.add_argument("--go", action="store_true")
     ap.add_argument("--remove-only", action="store_true")
     ap.add_argument("--clear-result", metavar="SHA256", help="first delete the result file of an earlier run from the RAM disk, only if its SHA-256 is this")
+    ap.add_argument("--remove-library", metavar="SHA256", help="a libJit.so left on the camera's service partition that is none of this kit's: delete it first, "
+                                                               "only if its SHA-256 is this (a library of this kit is deleted without being named)")
     ap.add_argument("--firmware-shown")
     ap.add_argument("--writes-memory", action="store_true", help="needed for a write step (L5, L6, L16, L17, L19, L20, N19, S16, S17, P29, P30, I19, I20): it changes the running camera's memory")
     a = ap.parse_args()
     if a.which in WRITE_STEPS and a.go and not (a.dry_run or a.selftest) and not a.writes_memory:
         raise SystemExit("%s is a write step: %s. It needs --writes-memory as well. Use fx3_apply.py. Nothing was sent." % (a.which, WRITE_STEPS[a.which][2]))
+    if a.remove_library:
+        if not re.fullmatch(r"[0-9a-fA-F]{64}", a.remove_library):
+            raise SystemExit("--remove-library takes the 64 hexadecimal digits of the file's SHA-256 (the stopped run prints them). Nothing was sent.")
+        EXTRA_LIBS[a.remove_library.lower()] = "the file named with --remove-library"
     lib = use(a.which)
     if a.dry_run or a.selftest:
         if a.selftest:                              # --dry-run and --selftest win over --go (the launchers always pass --go): nothing is sent
@@ -505,6 +556,9 @@ def main():
             print("Library sent: %s. On the camera now: %s." % (
                 "yes" if out.get("library_sent") else "no",
                 {False: "no (confirmed)", True: "YES", None: "not sent" if not out.get("library_sent") and not a.remove_only else "UNKNOWN"}[out.get("library_on_camera_after")]))
+            lr = out.get("leftover_removed")
+            if lr:
+                print("A library an earlier session had left on the camera (%s) was %s." % (lr["name"], "deleted first" if lr["gone"] else "NOT deleted: it is still there"))
             if a.which in WRITE_STEPS:
                 print("This was a WRITE step. A cold boot (battery out for 10 seconds) undoes everything written. On the A7S III, which runs the same coprocessor software, the power switch did too: keep the camera on between steps.")
             else:
