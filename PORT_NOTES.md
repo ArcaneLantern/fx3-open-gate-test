@@ -97,6 +97,46 @@ The step is optional and separate (`playback_fix_apply.cmd` / `playback_fix_putb
 - data only: row 0's height → 2560 with the 4K memory, which is probably 3–10% too small;
 - no change: keep playback off.
 
+## Open gate at 25p and 29.97p: `ogsq_fx3_v2`, `ogfile2560_hs_s_fx3_v3`, `ogfilesi2560_fx3_v2` (built 2026-11-26; 29.97p NOT RUN)
+
+The owner asked for 25p, 30p, 50p, 60p and 100p, and 100p in place of NTSC's 120p. **Only 25p and 29.97p are possible at full resolution**, and the owner chose those:
+- The only full-height read-out of the sensor is sensor mode 0x01 (matrix column 1), one row per line of at least 312 units of 1/36 MHz (8.7 µs). The camera's own full-height mode 0xe011 runs it at HMAX 312, VMAX 3140: 36.7 fps at most. 2832 rows plus margins need 2998 lines, about 26 ms.
+- The fast 4K modes (FF 4K 0x21, the 3840 × 2160 crop 0x23) read two rows per line but only the 16:9 band. The window belongs to the mode number inside the sensor (the A7S III's fourth write test). Even at the 4K band's row rate, 2832 rows would take about 10.4 ms, more than a 100p frame.
+- What does exist: binned full-field read-outs (2 × 2 at 2120 × 1416 up to about 89 fps; 3 × 3 at 1412 × 938 up to 120p). They would be 1.8× to 2.7× upscales on a new pipeline; not built (owner's choice).
+
+**Drive modes.** 23.98p (NTSC) and 24p (PAL) run 0x8c0 (index 12); 29.97p (NTSC) and 25p (PAL) run 0x820 (index 10), the selector's 30p family (frame-rate code 2). A tester found the latter on his FX3 in PAL: with v1 at 25p the picture was the 16:9 band stretched, and with v1's cells moved to row 10 it recorded open gate at 25.00 fps (`FX3-PAL25-MODE-0x820-REPORT-2026-11-25.md`). The two modes share the picture-record pair v1 writes.
+
+**Sensor side, `ogsq_fx3_v2`** (`build/build_og_fx3_v2.py`): v1's 19 cells and two records unchanged, plus 19 cells on row 10 by the same recipe:
+- timing rows: 59.94 system 266 × 4508 → 313 × 3828, P 29, E 23 = 29.970 fps; 50 system 268 × 5364 → 313 × 4600, P 23, E 1 = 25.000 fps (the tester's row, which ran). Both follow the rule of every stock row, with VMAX ≥ 2998.
+- read-out frame-length fields VMAX / 4 − 23: 934 and 1127.
+- Every row-10 cell except the 59.94-system ones equals the tester's design byte for byte (the builder asserts it).
+
+**Stored records, NTSC and PAL.** The camera computes each mode's stored record at start-up from the 60 Hz or the 50 Hz timing table. v1 carried only 0x8c0's NTSC record, so its L5 refused a camera set to PAL ("holds neither the stock nor the new bytes"). v2 carries 0x820's and 0x8c0's records in both systems: 62 bytes each, at the same offsets as v1's. The new L5 uses whichever system the camera holds (readcheck.c MULTI_REC, as the FX30 kit). The emulated PAL run takes each read-out row's 50 Hz frame-length field: with that, the PAL 0x820 record equals the tester's stock and new bytes, which he found on his camera at all 62 offsets. NTSC 0x8c0 equals v1's record.
+
+**Encoder.** On the FX3 one encoder core already serves stock 4K up to 59.94p: all 84 long-GOP 3840 × 2160 descriptors at rate codes 0–5 have UseCore 0. So 3840 × 2560 at 29.97p (295 Mpx/s) keeps one core, the same edit as 23.98p and 25p.
+- `ogfile2560_hs_s_fx3_v3` = v2 + the 29.97p descriptors and profiles (rate code 2): 48 av-cam sites more (`build_ogfile.py --build fx3_702 --meta --rate30`).
+- `ogfilesi2560_fx3_v2` = S-I v1 + descriptors #112 / #115 (classes 12 and 15) and their profiles: 8 sites more (`build_ogfile_si.py --build fx3_702 --rate30`).
+- The A7 IV and FX3 designs these builders wrote before regenerate byte for byte.
+
+**Emulated on the FX3's own code** (`build/emu_ogfile30_fx3.py` → `evidence/fx3/ogfile30_fx3_emu.json`, 11 checks):
+- the matcher finds all 49 changed descriptors at 3840 × 2560, and every other request from 1920 wide up answers as in stock; 3840 × 2560 at 50p, 59.94p and the high frame rates finds nothing (refused, as at 24p today);
+- at 29.97p the memory function asks the same blocks as at 23.98p, and the codec's need fits them;
+- the start-block builder takes every changed profile;
+- the track config gives 3840 × 2560 for combs 0, 2, 5, 7, 9 at every rate code (1,560 requests).
+
+**Steps and pins.** L5 `99116990` / L6 `a2f67b80` (ogsq_fx3_v2; L6 also puts back v1), L19 `64793d5a` / L20 `ba041c6e` (v3; L20 also puts back v2 and v1), I19 `3a553194` / I20 `0754c501` (S-I v2; I20 also puts back v1). O5 `9fd94c17` is the previous L5 byte for byte (`--only-24p`, `open_gate_apply_only_24p.cmd`). The libraries they replace are in `fx3_run.EARLIER_LIBS`, so one left on a camera is still deleted.
+
+**Write emulation** (`emu_fx3_write.py`, 113 cases, 21 new):
+- L5 on a PAL camera, again, and L6;
+- records of mixed systems: refused;
+- 0x820's record not stock: refused;
+- lost writes on PAL;
+- O5 on NTSC, the new L5 over it, and L6 after either;
+- O5 on PAL: refused;
+- the new L19 / I19 / L20 / I20 over the previous kit's state.
+
+**Not known:** 29.97p on a camera; XAVC HS and S-I at 25p (the tester recorded XAVC S); whether movie standby runs 0x820. The A7S III notes read the glitchy live view that way, and now 0x820 is full height too.
+
 ## XAVC S-I 4K: `ogfilesi2560_fx3_v1`, steps I19 / I20 (built 2026-11-25, NOT RUN ON ANY CAMERA)
 
 The A7 IV kit's S-I test step (`ogfilesi2560_v1`, request 70, itself not run yet) ported to the FX3 and made the last step of the default apply, so one run gives XAVC HS 4K, XAVC S 4K and XAVC S-I 4K at 3840 × 2560 (owner, 2026-11-25: one patcher for both, no reset between). `--no-si` / `open_gate_apply_no_si.cmd` leave it out; the put back starts with I20.
@@ -265,23 +305,24 @@ Left stock: the fit words, the 17:9 ratios, and the HDMI manual-layout copy (0x1
   - without the av-cam reservation, av-cam.bin is not read;
   - with an existing result, nothing is done.
   - **And the other way round:** the published A7S III and ZV-E1 check libraries both say NOT READY on an FX3, so neither kit's apply starts on one.
-- **Write emulation** (`emu_fx3_write.py`, 92 cases: 45 for the open-gate and screen steps, 12 for the S-I step, and the playback step's 35 from `emu_fx3_playback.py`):
+- **Write emulation** (`emu_fx3_write.py`, 113 cases: 45 for the open-gate and screen steps, 12 for the S-I step, 21 for the 25p/30p steps (2026-11-26), and the playback step's 35 from `emu_fx3_playback.py`):
   - apply, apply again, put back byte for byte;
   - foreign bytes, a lost write undone, a null records pointer, a wrong guard (each of the 32 screen guards);
   - the stored record as the A7S III tester's camera held it, with its run-time bytes left alone (the FX3's stock record is identical).
   - **Safety:** the A7S III kit's own L5, S16 and L19 libraries write nothing on an FX3, even with L5's pointer chain made to reach the FX3's real object.
 - **Scripts.** `fx3_run.py` and `fx3_apply.py` are `s3_run.py` / `s3_apply.py` with this camera's libraries, pins, dump decoder and texts. The FX3 has no mode dial: the texts use its MODE button. Every library's `--selftest` and every launcher's `--dry-run` pass, also from the published tree. The dump decoder reads the panel type, the ratio, the frame rows, the de-squeeze ratios, the crop and the 30 words.
 
-Library pins (2026-11-25): check `6f99aef2`, dump `fdb83bfe` (`fx3read_v2`), L5 `9fd94c17`, L6 `6c8544fb`, L16 `cf644fb3`, L17 `5a3c16bf`, L19 `c028f58c`, L20 `b84dd675`, N19 `47400649` (= the first kit's L19), S16 `bc40334b`, S17 `50a96268`, P29 `c0ccb8c8`, P30 `671de524`, I19 `740ba559`, I20 `5cc2d1a6` (full hashes in `fx3_run.py`). The first kit (run 2026-11-24): check `fcf97a8e`, dump `ad2bae79`, L19 `47400649`, L20 `6ca3ee7d`, header `fx3read_v1`, the other libraries as now. A result belongs to a kit only if its header and each step's manifest name that kit's libraries.
+Library pins (2026-11-26): check `6f99aef2`, dump `fdb83bfe` (`fx3read_v2`), L5 `99116990`, L6 `a2f67b80`, O5 `9fd94c17` (= the 2026-11-25 kit's L5), L16 `cf644fb3`, L17 `5a3c16bf`, L19 `64793d5a`, L20 `ba041c6e`, N19 `47400649` (= the first kit's L19), S16 `bc40334b`, S17 `50a96268`, P29 `c0ccb8c8`, P30 `671de524`, I19 `3a553194`, I20 `0754c501` (full hashes in `fx3_run.py`). The 2026-11-25 kit: L5 `9fd94c17`, L6 `6c8544fb`, L19 `c028f58c`, L20 `b84dd675`, I19 `740ba559`, I20 `5cc2d1a6`. The first kit (run 2026-11-24): check `fcf97a8e`, dump `ad2bae79`, L19 `47400649`, L20 `6ca3ee7d`, header `fx3read_v1`, the other libraries as now. A result belongs to a kit only if its header and each step's manifest name that kit's libraries.
 
 ## Not known yet
 
 - Whether the v2 headers change anything on the camera beyond the file (they did not on the A7 IV), and whether editors then open the original files at 3:2.
+- **29.97p:** built and emulated, not run; 25p ran on a tester's FX3 with his own tools, not yet with this kit (see "Open gate at 25p and 29.97p" above).
 - **XAVC S-I 4K:** built and emulated, not run (see its section above).
 - **Why a tester's L19 session was cut off** and left its library on the camera (2026-11-26, see its section above).
 - **In-camera playback:** the cause is found and the playback step is built and emulated, not run (see "The playback step" above). Until it is tested, testers are told not to play clips back.
 - What made the first apply run unreliable for tester 1. The dumps show no fault, and the camera was started afresh between the two runs.
-- What the A7S III left open: the glitchy live view on entering movie mode from stills, exposure and autofocus, 60p (crashed the A7S III), PAL.
+- What the A7S III left open: the glitchy live view on entering movie mode from stills, exposure and autofocus, 60p (crashed the A7S III).
 - Whether the power switch alone removes the patch on the FX3 (it does on the A7S III; tester 1's second boot does not say which way the camera was restarted).
 - That the menu's 1.3x / 1.5x / 1.6x / 2.0x send the codes 1 / 2 / 3 / 4. This is inferred from the ratios; appFw's mapping was not read.
 - What the FX3's HDMI output shows in the open-gate state, with or without de-squeeze. HDMI is not part of this kit.

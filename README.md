@@ -1,9 +1,11 @@
 # FX3 open gate: test kit (firmware 7.02)
 
-<p><b>Open gate works on the FX3 (two testers, 2026-11-24).</b> This kit is the A7S III open-gate kit ported to the Sony FX3 (ILME-FX3) firmware 7.02. It records a true 3840 × 2560 picture of the whole sensor area at 23.98p, shows it at 3:2 on the rear screen, and sets the FX3's own De-Squeeze Display for it. The patch only writes to the camera's memory.</p>
+<p><b>Open gate works on the FX3 (two testers, 2026-11-24).</b> This kit is the A7S III open-gate kit ported to the Sony FX3 (ILME-FX3) firmware 7.02. It records a true 3840 × 2560 picture of the whole sensor area at 23.98p (and, new, at 29.97p in NTSC and 25p in PAL), shows it at 3:2 on the rear screen, and sets the FX3's own De-Squeeze Display for it. The patch only writes to the camera's memory.</p>
 
-**Where it stands (2026-11-25):**
+**Where it stands (2026-11-26):**
 
+- **New in this version: open gate at 25p and 30p too.** The same apply now also covers 29.97p (NTSC) and 25p (PAL), in XAVC HS 4K, XAVC S 4K and XAVC S-I 4K, so you can change the frame rate in the menu without a new apply. 25p is a tester's design that recorded open gate on his FX3 in PAL (`FX3-PAL25-MODE-0x820-REPORT-2026-11-25.md`); 29.97p is the same design at 30p and has **not run yet**. The sensor step now also works on a camera set to PAL (the previous one refused it). `open_gate_apply_only_24p.cmd` gives the previous, 24p-only sensor step (NTSC only).
+- **50p, 60p, 100p and 120p cannot be open gate.** The sensor's only full-height read-out takes about 26 ms a frame (Sony's own fastest full-height mode runs at 36.7 fps), so 30p is the highest rate it serves. The fast 4K modes read only the 16:9 band, and that window is fixed inside the sensor. While the kit is applied those rates refuse to record.
 - **The file is right.** Recorded in XAVC HS 4K (HEVC) and XAVC S 4K (AVC) at 23.98p: a true 3840 × 2560 picture. Against a full-sensor photo it covers 99.7–99.99% of the width and height (a second tester's measurement, `FX3-UPSTREAM-TEST-REPORT-2026-11-24.md`).
 - **The screen is right.** The movie live view is 3:2. The dump read the rear panel's type: it is a **4:3** panel, as the firmware suggested.
 - **The MP4 header fix (since 655784f), not run yet:** the files' MP4 headers (`tkhd`, the `stsd` sample entry and Sony's PROF/VPRF) now say 3840 × 2560, so editors open them at 3:2 without a remux. This is the A7 IV kit's header fix, which works on that camera, ported to the FX3. `open_gate_apply_no_meta.cmd` gives the first version's encoder step instead.
@@ -13,14 +15,14 @@
 - **Still not right:** Sony's XML (in the file and the sidecar) says 3840 × 2160, 16:9. The stream's level label (HEVC 5.0 / AVC 5.1) is below what a 3840 × 2560 picture needs; computers decode it anyway. The LCD goes black for under half a second when an XAVC S recording starts (the file is not affected).
 - **A power-off removes the patch:** apply it again after every power-on.
 
-**What it does.** A true 3840 × 2560 (3:2) recording in XAVC HS 4K, XAVC S 4K and (new) XAVC S-I 4K at 23.98p, set in the camera's memory only. A battery pull removes it. On the A7S III, switching the camera off and on removes it too.
+**What it does.** A true 3840 × 2560 (3:2) recording in XAVC HS 4K, XAVC S 4K and XAVC S-I 4K at 23.98p and (new) 29.97p in NTSC, or 24p and 25p in PAL, set in the camera's memory only. A battery pull removes it. On the A7S III, switching the camera off and on removes it too.
 
 **Why it works:**
 
 - **Same software.** The FX3 7.02 image processor runs the A7S III 5.01 image-processor software, rebuilt at other addresses. It has the same sensor (IMX510), the same 40 video modes, the same sensor tables byte for byte, the same record calculator and the same scaler code.
 - **Same designs.** Every step of this kit is the A7S III's working step at the FX3's addresses. Each was checked against the FX3's own code in emulation (`PORT_NOTES.md`).
 - **Kits cannot be mixed up.** An A7S III kit run on an FX3 refuses to start, and so does this kit on an A7S III. Checked in emulation.
-- **Not reported yet:** what the De-Squeeze Display shows, the focus frames, long recordings, exposure and autofocus, PAL.
+- **Not reported yet:** what the De-Squeeze Display shows, the focus frames, long recordings, exposure and autofocus, 29.97p, 25p with this kit's own launchers (the tester used his own tools).
 
 **No C3 preview routine.** The A7S III kit adds an anamorphic preview on its C3 key. The FX3 has its own **De-Squeeze Display**, so this kit keeps that instead and sets its shapes for the 3:2 picture (see "De-Squeeze Display").
 
@@ -30,7 +32,8 @@
 |---|---|---|
 | `check_readonly.cmd` | Confirms the camera runs the 7.02 software the port was made from and reads what every patch site holds. Verdict READY / NOT READY | No |
 | `dump_info.cmd` | The same, plus facts for the port: memory map, the camera's own logs, sensor register state, internal tables, the display tables (panel type, screen shape, de-squeeze shapes) | No |
-| `open_gate_apply.cmd` | Applies the default state in five steps: open gate, the screen at 3:2 with De-Squeeze Display set for it, then XAVC S-I 4K (new). Ends with one read-only session | **Yes: memory only** |
+| `open_gate_apply.cmd` | Applies the default state in five steps: open gate (24p, and 30p / 25p), the screen at 3:2 with De-Squeeze Display set for it, then XAVC S-I 4K. Ends with one read-only session | **Yes: memory only** |
+| `open_gate_apply_only_24p.cmd` | The default state with the previous sensor step: open gate at 24p only, NTSC only | **Yes: memory only** |
 | `open_gate_apply_no_screen.cmd` | Only the three open-gate steps | **Yes: memory only** |
 | `open_gate_apply_no_si.cmd` | The default state without the XAVC S-I 4K step (XAVC HS 4K and XAVC S 4K only, as the first version) | **Yes: memory only** |
 | `open_gate_apply_no_meta.cmd` | The default state with the first version's encoder step: the MP4 headers keep saying 3840 × 2160 | **Yes: memory only** |
@@ -60,7 +63,7 @@ The macOS kit is the A7 IV kit's macOS port, carried over unchanged apart from t
 
 1. Python 3.9 or later: the one macOS offers with the Xcode Command Line Tools (run `xcode-select --install` in Terminal) works, or install it from python.org.
 2. Double-click `macos/setup.command`. It sets up Python and the USB library the scripts use. No Homebrew and no driver are needed.
-3. Each Windows launcher has a macOS twin with the same name: `macos/check_readonly.command`, `dump_info.command`, `open_gate_apply.command`, `open_gate_apply_no_screen.command`, `open_gate_apply_no_si.command`, `open_gate_apply_no_meta.command`, `open_gate_putback.command`, `screen_putback.command`, `playback_fix_apply.command`, `playback_fix_putback.command`. Everything below that says `.cmd` works the same with the `.command` file.
+3. Each Windows launcher has a macOS twin with the same name: `macos/check_readonly.command`, `dump_info.command`, `open_gate_apply.command`, `open_gate_apply_no_screen.command`, `open_gate_apply_no_si.command`, `open_gate_apply_no_meta.command`, `open_gate_apply_only_24p.command`, `open_gate_putback.command`, `screen_putback.command`, `playback_fix_apply.command`, `playback_fix_putback.command`. Everything below that says `.cmd` works the same with the `.command` file.
 
 Each live run asks for your Mac password: macOS keeps its own driver on the camera's USB connection, and only an administrator can hand the camera over to the script. The script unmounts the camera's memory card first; it does not erase anything on it. The results go to the same `windows/camera_private` folder.
 
@@ -72,7 +75,7 @@ If macOS refuses to open a .command file ("unidentified developer" or "could not
 
 1. Install the APK (allow installing from unknown sources). It installs beside the A7 IV and A7S III apps; they do not share anything on the phone.
 2. Set the camera as for the PC (below), and also **USB Power Supply: Off**, or it charges from the phone.
-3. **1. Read-only check** first: the apply starts only after a check on this phone said READY. Then **2. Apply to camera**. The "Screen step" box chooses between the four-step apply (ticked) and the three open-gate steps only. The "XAVC S-I 4K step" box (ticked) adds the S-I step to the apply and the put back (app 0.4).
+3. **1. Read-only check** first: the apply starts only after a check on this phone said READY. Then **2. Apply to camera**. The "Screen step" box chooses between the four-step apply (ticked) and the three open-gate steps only. The "XAVC S-I 4K step" box (ticked) adds the S-I step to the apply and the put back (app 0.4). The "24p only" box (unticked) takes the previous, 24p-only sensor step (app 0.6).
 4. When Android asks to open *FX3 Open Gate* for the camera, tick **Always** and press OK. It comes up twice: once in Mass Storage, once in service mode.
 5. When the log says **unplug and plug in again**, do that with the phone cable. Never switch the camera off.
 6. **Stop waiting** ends a wait for the camera. It never interrupts a step that is talking to the camera.
@@ -95,18 +98,18 @@ What they do to the camera: they switch it to service mode, write one small prog
 
 **What it changes.** Five groups of bytes in the running camera's memory, one per step:
 
-1. The sensor read-out and the two 4K picture records of the image processor: full sensor height instead of the 16:9 band (the A7S III's sensor step v5).
+1. The sensor read-out and the two 4K picture records of the image processor: full sensor height instead of the 16:9 band (the A7S III's sensor step v5), for the 24p video mode and (new) the 30p/25p one, and each mode's stored settings in the form your camera holds (NTSC or PAL).
 2. One size word: 3840 × 2160 becomes 3840 × 2560.
-3. The encoder's tables for XAVC HS 4K and XAVC S 4K at 23.98p and 25p, and (new) the two height values the MP4 writer puts in the file's headers, 2160 → 2560. `open_gate_apply_no_meta.cmd` leaves the headers at 2160, as the first version did.
+3. The encoder's tables for XAVC HS 4K and XAVC S 4K at 23.98p, 25p and (new) 29.97p, and the two height values the MP4 writer puts in the file's headers, 2160 → 2560. `open_gate_apply_no_meta.cmd` leaves the headers at 2160, as the first version did.
 4. The screen (30 words):
    - The height of a 16:9 picture on the rear screen goes from width × 9/16 to width × 2/3. The live view is a 16:9 frame holding the whole sensor area, so this shows it at its true 3:2 shape: thin black bars above and below on a 4:3 screen, the whole screen on a 3:2 one.
    - The focus frames are told where the picture now is.
    - De-Squeeze Display's shapes are set for the 3:2 picture (below).
-5. XAVC S-I 4K (new, 17 sites): the S-I encoder request's height, and the four S-I 4K descriptors for 23.98p and 25p (both bit-rate classes) with their profiles: height 2560, and the rows the first of the two encoder cores takes, 1072 → 1280. The bit rate stays the menu's (240M at 24p), so a bigger picture gets the same bits. No memory change is needed: at 3840 × 2560 the S-I encoder asks the same memory blocks as XAVC S 4K, and the codec firmware's own calculation needs 44 of their 101 MB. XAVC HS 4K and XAVC S 4K are not touched by this step, and its sites are none of step 3's.
+5. XAVC S-I 4K (25 sites): the S-I encoder request's height, and the six S-I 4K descriptors for 23.98p, 25p and 29.97p (both bit-rate classes) with their profiles: height 2560, and the rows the first of the two encoder cores takes, 1072 → 1280. The bit rate stays the menu's (240M at 24p, 300M at 30p), so a bigger picture gets the same bits. No memory change is needed: at 3840 × 2560 the S-I encoder asks the same memory blocks as XAVC S 4K, and the codec firmware's own calculation needs 44 of their 101 MB. XAVC HS 4K and XAVC S 4K are not touched by this step, and its sites are none of step 3's.
 
 Each step first checks that every byte it is about to change holds its stock value, writes, reads back, and undoes its own writes if anything does not match. `open_gate_apply_no_screen.cmd` leaves out step 4, `open_gate_apply_no_si.cmd` step 5.
 
-**Already applied?** Running `open_gate_apply.cmd` again in the same power-on is fine: steps that find their bytes already in place say NOTHING TO DO. So on a camera patched with the previous version, one more run adds only the S-I step.
+**Already applied?** Running `open_gate_apply.cmd` again in the same power-on is fine: steps that find their bytes already in place say NOTHING TO DO. So on a camera patched with the previous version in the same power-on, one more run adds only the new 30p/25p parts.
 
 **De-Squeeze Display** (MENU > Setup > Display Option > De-Squeeze Display; Sony's own feature, in Movie). The camera works out each shape for a 16:9 picture. With the open-gate picture, which is 3:2, every shape would be about 18% too wide, so step 4 gives it the shapes of the 3:2 frame:
 
@@ -127,13 +130,13 @@ All of it is the preview only: the recorded file does not change. The camera its
 
 **While it is applied**
 
-- Use only XAVC HS 4K, XAVC S 4K or XAVC S-I 4K at 24p. In XAVC S-I 4K, 30p and 60p will not record. **On the A7S III 60p distorted the picture and crashed the camera**; other formats, frame rates, S&Q and APS-C/Super 35 are likely to fail or hang too.
+- Use only XAVC HS 4K, XAVC S 4K or XAVC S-I 4K at 24p, or 30p (NTSC) / 25p (PAL); with `open_gate_apply_only_24p.cmd`, 24p only. 50p, 60p and faster will not record. **On the A7S III 60p distorted the picture and crashed the camera**; other formats, S&Q and APS-C/Super 35 are likely to fail or hang too.
 - Every 16:9 picture on the rear screen takes the 3:2 shape, and De-Squeeze Display uses the 3:2 shapes, so other movie formats look wrong on the screen. 2.0x shows any picture at 3:1. HDMI output is not part of this kit and has not been checked.
 - **Do not switch the camera off:** on the A7S III the power switch removes the patch. Assume it does here too, and apply it again after every power-off.
 
 **How to run it**
 
-1. In the menu, set File Format XAVC S 4K (or XAVC HS 4K) and 24p. APS-C/Super 35 off, S&Q off. De-Squeeze Display Off for now.
+1. In the menu, set File Format XAVC S 4K (or XAVC HS 4K) and 24p (or 30p / 25p). APS-C/Super 35 off, S&Q off. De-Squeeze Display Off for now.
 2. Select a still mode. Then pull the battery for 10 seconds and switch on, so that nothing of an earlier run is left. The camera starts in the still mode. Do not go into Movie yet.
 3. Connect USB and run `windows/check_readonly.cmd`. It must say VERDICT READY.
 4. Run `windows/open_gate_apply.cmd`. It starts only if your newest saved check or dump says READY. It asks for the firmware version and for a typed YES.
@@ -141,8 +144,9 @@ All of it is the preview only: the recorded file does not change. The camera its
 6. After the five steps the script asks for one more session, which only reads. **Unplug USB, set Movie, look at the screen, and plug in again.** The script then runs the read-only dump by itself and prints the rear panel's type.
 7. When it says so, unplug. The live view should be the whole picture at 3:2.
 8. Record 20 to 30 seconds and stop. **Do not play it back on the camera** (see above): check it on a computer. Then try De-Squeeze Display at each setting.
-9. XAVC S-I 4K: set File Format XAVC S-I 4K, 24p (240M), Proxy Recording Off, a fast card (V90 SD or CFexpress). Record 20 to 30 seconds. Then switch back to XAVC HS 4K and record a short control clip.
-10. To return to stock: battery out for 10 seconds (or switch off and on, if it works as on the A7S III), or `open_gate_putback.cmd`.
+9. 30p (NTSC) or 25p (PAL), new: set the frame rate in the menu, no new apply, and record 20 to 30 seconds. Please say whether the picture is the whole sensor as at 24p, and send the clip's MediaInfo.
+10. XAVC S-I 4K: set File Format XAVC S-I 4K, 24p (240M), Proxy Recording Off, a fast card (V90 SD or CFexpress). Record 20 to 30 seconds. Then switch back to XAVC HS 4K and record a short control clip.
+11. To return to stock: battery out for 10 seconds (or switch off and on, if it works as on the A7S III), or `open_gate_putback.cmd`.
 
 **The glitchy live view** (seen on the A7S III; the FX3 runs the same software)
 

@@ -91,6 +91,12 @@ SIZES_BY_BUILD = {
                                                      "fx3_apply.py apply",
                                         "after": "ogfile2560_hs_s_fx3_v2"}},
 }
+if B.RATE30:                                              # --rate30 (2026-11-26): the FX3's 25p/30p kit, v2 = v1 + the two 29.97p descriptors (classes 12, 15)
+    SIZES_BY_BUILD["fx3_702"] = {"ogfilesi2560_fx3_v2": {"raster": (3840, 2560), "shape": "ogfile2560_hs_s_fx3_v3",
+                                                         "goes_with": "the FX3 kit's 3840x2560 open-gate state at 23.98p, 25p and 29.97p (ogsq_fx3_v2, outsz2560_fx3_v1 "
+                                                                      "in coprocessor RAM; ogfile2560_hs_s_fx3_v3 on the main processor), applied as one more level "
+                                                                      "19 step (I19) of fx3_apply.py apply",
+                                                         "after": "ogfile2560_hs_s_fx3_v3"}}
 # A1 II 4.00 (2026-11-26, modding/A1M2_PORT_ENCODER.md): the 3840x2560 design only. Tables as build_ogfile.OTHER_BUILDS["a1m2_400"]; m_vpcSt found by
 # content (the A7 IV's 14 rows at 0x2e8a50, once). The A1 II's matcher 0x234acc scans from index 0 (the A7 IV's from 3 when request +0x74 is 0);
 # the S-I descriptors sit at 110+, so first_match() answers the same.
@@ -100,6 +106,14 @@ SIZES_BY_BUILD["a1m2_400"] = {"ogfilesi2560_a1m2_v1": {"raster": (3840, 2560), "
                                                                     "in coprocessor RAM; ogfile2560_hs_s_a1m2_v2 or _v1 on the main processor), applied as "
                                                                     "one more level 19 step after it",
                                                        "after": "ogfile2560_hs_s_a1m2_v2"}}
+# A6700 2.00 (2026-11-26, modding/A6700_PORT_ENCODER.md): the 3840x2560 design only. Tables as build_ogfile.OTHER_BUILDS["a6700_200"] (the FX30's
+# descriptors byte for byte); m_vpcSt found by content (the A7 IV's rows 0 to 11 at 0x2909c8, once). The matcher 0x2248c0 is the A7 IV's body.
+VPCS["a6700_200"] = 0x2909C8
+SIZES_BY_BUILD["a6700_200"] = {"ogfilesi2560_a6700_v1": {"raster": (3840, 2560), "shape": "ogfile2560_hs_s_a6700_v1",
+                                                         "goes_with": "the A6700 kit's 3840x2560 open-gate state (raw write buffer, sensor side and output "
+                                                                      "size in coprocessor RAM; ogfile2560_hs_s_a6700_v2 or _v1 on the main processor), "
+                                                                      "applied as one more level 19 step (I19) after it",
+                                                         "after": "ogfile2560_hs_s_a6700_v2"}}
 WHY = ("the owner asked for a test script that applies the same open gate (3840x2560 and 5760x3840) to XAVC S-I 4K (2026-11-25); this is its "
        "encoder side")
 
@@ -161,7 +175,7 @@ def build(name, lm, av):
     cfg = SIZES_BY_BUILD[BUILD][name]
     W1, H1 = cfg["raster"]
     full = (W1 != W0)
-    d = Design(name, f"A {W1} by {H1} file in XAVC S-I 4K (AVC intra 4:2:2 10-bit) at 23.98p and 25p: encoder request, descriptors and profiles; "
+    d = Design(name, f"A {W1} by {H1} file in XAVC S-I 4K (AVC intra 4:2:2 10-bit) at {B.rate_text()}: encoder request, descriptors and profiles; "
                      f"one step on top of the {W1}x{H1} open-gate state")
     # ---- libmpr: the comb row and the intra flag
     o = B.COMB + 0x18 * SI_COMB
@@ -186,7 +200,8 @@ def build(name, lm, av):
     urows = [struct.unpack_from("<4I", av, B.UNIT_TABLE + 0x10 * k) for k in range(10)]
     assert urows[4] == urows[2] == (0x486, 0x474, 0x477, 0x47A) and urows[9] == (0x664, 0x474, 0x477, 0x690), urows
     mine = [r for r in rows if r["codec"] == SI_CODEC and r["wh"] == (W0, H0) and not r["infr"] and r["codfr"] in RATES and r["key"] // 100000 == 1]
-    assert sorted((r["codfr"], r["cls"]) for r in mine) == [(3, 13), (3, 18), (5, 14), (5, 19)], [(r["k"], r["codfr"], r["cls"]) for r in mine]
+    assert sorted((r["codfr"], r["cls"]) for r in mine) == [(2, 12), (2, 15)] * B.RATE30 + [(3, 13), (3, 18), (5, 14), (5, 19)], \
+        [(r["k"], r["codfr"], r["cls"]) for r in mine]
     key_users = {}
     for r in rows:
         key_users.setdefault(r["key"], []).append(r["k"])
@@ -231,7 +246,7 @@ def build(name, lm, av):
         picked.append({"descriptor": r["k"], "family": "si", "format": "4:2:2 10-bit intra", "rate": rate, "coding_rate_code": r["codfr"], "input_rate": 0,
                        "quality_class": r["cls"], "f0c": r["f0c"], "profile_key": r["key"], "pred_mode": r["pred_mode"], "use_core": r["core"],
                        "plus_38_3c": list(r["w38"]), "level_byte": p[LEVEL_OFF], "picture_bits": budget,
-                       "bit_rate_millions": round(budget * (24000 / 1001 if r["codfr"] == 5 else 25) / 1e6, 1),
+                       "bit_rate_millions": round(budget * {5: 24000 / 1001, 3: 25, 2: 30000 / 1001}[r["codfr"]] / 1e6, 1),
                        "twin_never_reached": twin_k[0] if twin_k else None})
     spans = sorted((p["binary"], int(p["file_off"], 16), len(p["new"]) // 2) for p in d.patches)
     assert all(a[0] != b[0] or a[1] + a[2] <= b[1] for a, b in zip(spans, spans[1:])), "sites overlap"
@@ -277,6 +292,10 @@ def main():
                                  "the MP4 headers say what the state's step 4 makes them say for AVC 3840-wide formats (%dx%d with ogfile2560_hs_s_v2 / "
                                  "ogfile57r300m1_v4; 3840x2160 with their --no-meta variants); Sony's XML says 3840x2160" % (W1, H1)],
                "descriptors": picked, "patches": d.patches, "optional_sites": []}
+        if B.RATE30:                                      # 2026-11-26, the FX3's 25p/30p kit: 29.97p as well (rate code 2, classes 12 and 15)
+            out["while_applied"][0] = ("XAVC S-I 4K at 23.98p, 25p and 29.97p records %dx%d; at 50p/59.94p the request says %dx%d and finds no descriptor: "
+                                       "refused at encoder open (do not use them)" % (W1, H1, W1, H1))
+            out["while_applied"][2] = "the picture bit budget is the menu's (240M at 24p, 250M at 25p, 300M at 30p): the same bits for a bigger picture"
         if BUILD == "fx3_702":                            # the FX3's words (the A7 IV designs' text is unchanged)
             out = {**{"build": BUILD, "camera": "ILME-FX3 (FX3), firmware 7.02"}, **out}
             out["level"] = "the stock level bytes are kept (51, Level 5.1), as the FX3's ogfile2560_hs_s_fx3_v1 / v2 keep XAVC S 4K's"
@@ -292,6 +311,16 @@ def main():
             out["while_applied"][3] = ("the MP4 headers say what the kit's encoder step makes them say for AVC 3840-wide formats (%dx%d with "
                                        "ogfile2560_hs_s_a1m2_v2; 3840x2160 with its v1); Sony's XML says 3840x2160" % (W1, H1))
             out["status"] = "built from the A1 II 4.00 files and emulated on its own code (build/run_ogfile_emu_a1m2.py); never run on an A1 II"
+        elif BUILD == "a6700_200":                        # the A6700's words (2026-11-26)
+            out = {**{"build": BUILD, "camera": "ILCE-6700 (A6700), firmware 2.00"}, **out}
+            out["level"] = "the stock level bytes are kept (51, Level 5.1), as the A6700's ogfile2560_hs_s_a6700_v1 / v2 keep XAVC S 4K's"
+            out["memory"]["unit_type"] = ("4 (intra above 8,847,360 pixels; the A6700's memory function 0x21c808 is the A7 IV's 0x2136c4, emulated in "
+                                          "build/run_ogfile_emu_a6700.py)")
+            out["while_applied"][3] = ("the MP4 headers say what the kit's step L19 makes them say for AVC 3840-wide formats (%dx%d with "
+                                       "ogfile2560_hs_s_a6700_v2; 3840x2160 with its v1); Sony's XML says 3840x2160" % (W1, H1))
+            out["status"] = ("built from the A6700 2.00 files and emulated on its own code (build/run_ogfile_emu_a6700.py); its four descriptors and their "
+                             "raster sites are part of the contributed design (ogfile2560_full_a6700_v1, part s_i), which also changes the UseCore 0 twins "
+                             "and raises the level byte to 60; never run on an A6700 by us")
         out_dir.mkdir(exist_ok=True)
         (out_dir / f"{d.name}.json").write_text(json.dumps(out, indent=1) + "\n", encoding="utf8", newline="\n")
         for b, ps in by.items():

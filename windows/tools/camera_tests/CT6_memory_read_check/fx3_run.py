@@ -42,15 +42,20 @@ LEVELS = {"check": 101, "dump": 102}              # numbers outside the A7 IV ru
 # They change the running camera's memory until a cold boot. They are run through fx3_apply.py, never by a launcher of the read-only kit,
 # and the libraries are not in the published kit unless it was published with --include-write.
 WRITE_STEPS = {
-    "L5": ("libJit_fx3_L5.so", "9fd94c179f8c7b721600313a1e7a7f2a173a1a3dae24319fe4411cba4dac5946", "apply the sensor-side design ogsq_fx3_v1 (sensor cells, two records, the stored record; the A7S III's working ogsq_s3_v5)"),
-    "L6": ("libJit_fx3_L6.so", "6c8544fb91879ba4c1b8ce9351826253b61557d797466f836e4e8e65b0acf3b6", "put back the sensor-side design ogsq_fx3_v1"),
+    # L5/L6 since 2026-11-26: ogsq_fx3_v2 = v1 (drive mode 0x8c0: 23.98p, and 24p in PAL; the A7S III's working ogsq_s3_v5, which works on FX3s) + the same
+    # cells on drive mode 0x820 (29.97p, and 25p in PAL: a tester's 25p design, which ran) + the stored records of both modes in NTSC or PAL form, the
+    # one the camera holds (readcheck.c MULTI_REC). O5 is the earlier L5 (v1) byte for byte: apply --only-24p (NTSC only). L6 puts back either.
+    "L5": ("libJit_fx3_L5.so", "9911699077a8a9a3b85b288e8c23c7e7063c6a54de5e533c22144f64a8dff1f5", "apply the sensor-side design ogsq_fx3_v2 (24p and 25p/30p modes: sensor cells, two records, the stored records, NTSC or PAL)"),
+    "L6": ("libJit_fx3_L6.so", "a2f67b80aedb9cea1e0b449bd5988ecfb39e5f28fc347ad6c8c7afcde9890388", "put back the sensor-side design ogsq_fx3_v2 (or the earlier v1)"),
+    "O5": ("libJit_fx3_O5.so", "9fd94c179f8c7b721600313a1e7a7f2a173a1a3dae24319fe4411cba4dac5946", "apply the earlier sensor-side design ogsq_fx3_v1 (24p only, NTSC; the step that ran on FX3s)"),
     "L16": ("libJit_fx3_L16.so", "cf644fb3d893c54ed80bffdde74fc51d7a4aab90bd74486f240ae23aaf3f636f", "apply the output size outsz2560_fx3_v1 (one word)"),
     "L17": ("libJit_fx3_L17.so", "5a3c16bf88a3f7f817df12ea0e9aea8dc8e694755af69ac86f6e8339c6eba0d4", "put back the output size outsz2560_fx3_v1"),
     # L19/L20 since 2026-11-25: ogfile2560_hs_s_fx3_v2 = the first kit's encoder side (which ran on an FX3) + the two MP4 header heights, so
     # tkhd, stsd and Sony's PROF say 3840x2560 (the A7 IV's ogfile2560_hs_s_v2). L20 puts back either version. N19 = the first kit's L19,
     # byte for byte (apply --no-meta); its put back is L20 too (the first kit's L20 would leave the two heights on a v2 camera).
-    "L19": ("libJit_fx3_L19.so", "c028f58c3e3a941e22eaf07445df7137eb4c739d48ce0b4f3fdac4f7744828e6", "apply the encoder-side design ogfile2560_hs_s_fx3_v2 (101 + 4 sites, and the MP4 headers say 3840x2560: 2 more)"),
-    "L20": ("libJit_fx3_L20.so", "b84dd6758c18bed649aba7d3f62820a9bbb462f4fcceeade27bb91cdbe960f67", "put back the encoder-side design ogfile2560_hs_s_fx3_v2 (or the first kit's v1)"),
+    # 2026-11-26: L19/L20 carry ogfile2560_hs_s_fx3_v3 = v2 + the 29.97p descriptors and profiles (48 sites). L20 puts back v3, v2 or v1.
+    "L19": ("libJit_fx3_L19.so", "64793d5a77d391c618d763626e19cd0b9e39a7228a1a56093fd0a893ab73d621", "apply the encoder-side design ogfile2560_hs_s_fx3_v3 (23.98p, 25p, 29.97p: 149 + 4 sites, and the MP4 headers say 3840x2560: 2 more)"),
+    "L20": ("libJit_fx3_L20.so", "ba041c6eb5525a5eb5998f64f567be8b7ae7139076f47cc7d92df2e4bb5ae609", "put back the encoder-side design ogfile2560_hs_s_fx3_v3 (or v2, or the first kit's v1)"),
     "N19": ("libJit_fx3_N19.so", "47400649ac29ac03fd77b4805e0a41c60b4a3cfa1ae5e3f384f0d33a0b503050", "apply the first kit's encoder-side design ogfile2560_hs_s_fx3_v1 (101 + 4 sites; the MP4 headers keep 3840x2160)"),
     # The rear-screen step (optional, on top of the open-gate state): the same level 16/17 code with the screen words. The digits are the level the
     # library reports in its result's first line. There is no C step: the FX3's own De-Squeeze Display is kept (its ratios are part of S16).
@@ -65,11 +70,12 @@ WRITE_STEPS = {
     # XAVC S-I 4K (2026-11-25; NOT RUN ON ANY CAMERA): the same level 19/20 code with ogfilesi2560_fx3_v1, the A7 IV's ogfilesi2560_v1 at the FX3's
     # tables (build/build_ogfile_si.py --build fx3_702, emulated on the FX3's own code by build/emu_ogfilesi_fx3.py). One more step of apply and
     # putback, so one run gives XAVC HS 4K, XAVC S 4K and XAVC S-I 4K at 3840x2560; its sites are none of L19's (--no-si leaves it out).
-    "I19": ("libJit_fx3_I19.so", "740ba55937c233d1b143d14b8e48e826a8988ff78e72e8cf10d26dea8f14c8cc", "apply XAVC S-I 4K at 3840x2560: ogfilesi2560_fx3_v1 (the S-I encoder request, 4 descriptors and their profiles: 16 + 1 sites)"),
-    "I20": ("libJit_fx3_I20.so", "5cc2d1a692dbd3136c51ec88c345ea23c4204e83d7503721d9407ac9c636f63e", "put back XAVC S-I 4K: ogfilesi2560_fx3_v1"),
+    # 2026-11-26: ogfilesi2560_fx3_v2 = v1 + the two 29.97p descriptors and their profiles. I20 puts back v2 or v1.
+    "I19": ("libJit_fx3_I19.so", "3a553194f83439eb8c3fffaa545535ee656515378b52b10d37a8737d5831fe6a", "apply XAVC S-I 4K at 3840x2560: ogfilesi2560_fx3_v2 (23.98p, 25p, 29.97p: the S-I encoder request, 6 descriptors and their profiles: 24 + 1 sites)"),
+    "I20": ("libJit_fx3_I20.so", "0754c501aadb37c9db9e614dd93751bee1717dabd90c39588ea9173cd1ae66f2", "put back XAVC S-I 4K: ogfilesi2560_fx3_v2 (or v1)"),
 }
 PINS.update({k: v[:2] for k, v in WRITE_STEPS.items()})
-LEVELS.update({k: {"L": 200, "S": 300, "N": 500, "P": 600, "I": 700}[k[0]] + int(k[1:]) for k in WRITE_STEPS})
+LEVELS.update({k: {"L": 200, "S": 300, "N": 500, "P": 600, "I": 700, "O": 800}[k[0]] + int(k[1:]) for k in WRITE_STEPS})
 WHICH = "check"
 # Libraries this kit published before and no longer runs. With PINS they are the files a run may delete from the camera's service partition
 # when an earlier session left one behind (R.KNOWN_LIBS; on 2026-11-26 an FX3 tester's cut-off L19 session blocked every later run).
@@ -77,6 +83,13 @@ EARLIER_LIBS = {
     "6ca3ee7df282bda70bc50bb4f9284ccc622c2c20e6ab64b964a949148a33d836": "the first kit's L20 (put back of ogfile2560_hs_s_fx3_v1)",
     "fcf97a8ea56abee543734779b8cac10267b4b33adda863a4032c11436e6d78ce": "the first kit's read-only check (fx3read_v1)",
     "ad2bae7922865dd7faf3bce59aa4114e53fe56ce4366b133c96ce91414592527": "the first kit's read-only dump (fx3read_v1)",
+    # replaced on 2026-11-26 (open gate at 25p and 29.97p): the 2026-11-25 kit's L6, L19, L20, I19, I20 (its L5 is O5, still pinned). The L19 is the
+    # file an FX3 tester's cut-off session left on his camera (2026-11-26).
+    "6c8544fb91879ba4c1b8ce9351826253b61557d797466f836e4e8e65b0acf3b6": "the 2026-11-25 kit's L6 (put back of ogsq_fx3_v1)",
+    "c028f58c3e3a941e22eaf07445df7137eb4c739d48ce0b4f3fdac4f7744828e6": "the 2026-11-25 kit's L19 (ogfile2560_hs_s_fx3_v2)",
+    "b84dd6758c18bed649aba7d3f62820a9bbb462f4fcceeade27bb91cdbe960f67": "the 2026-11-25 kit's L20 (put back of ogfile2560_hs_s_fx3_v2)",
+    "740ba55937c233d1b143d14b8e48e826a8988ff78e72e8cf10d26dea8f14c8cc": "the 2026-11-25 kit's I19 (ogfilesi2560_fx3_v1)",
+    "5cc2d1a692dbd3136c51ec88c345ea23c4204e83d7503721d9407ac9c636f63e": "the 2026-11-25 kit's I20 (put back of ogfilesi2560_fx3_v1)",
 }
 EXTRA_LIBS = {}                                   # --remove-library: one more file, named by its SHA-256 on the command line
 
@@ -511,7 +524,7 @@ def main():
     ap.add_argument("--remove-library", metavar="SHA256", help="a libJit.so left on the camera's service partition that is none of this kit's: delete it first, "
                                                                "only if its SHA-256 is this (a library of this kit is deleted without being named)")
     ap.add_argument("--firmware-shown")
-    ap.add_argument("--writes-memory", action="store_true", help="needed for a write step (L5, L6, L16, L17, L19, L20, N19, S16, S17, P29, P30, I19, I20): it changes the running camera's memory")
+    ap.add_argument("--writes-memory", action="store_true", help="needed for a write step (L5, L6, O5, L16, L17, L19, L20, N19, S16, S17, P29, P30, I19, I20): it changes the running camera's memory")
     a = ap.parse_args()
     if a.which in WRITE_STEPS and a.go and not (a.dry_run or a.selftest) and not a.writes_memory:
         raise SystemExit("%s is a write step: %s. It needs --writes-memory as well. Use fx3_apply.py. Nothing was sent." % (a.which, WRITE_STEPS[a.which][2]))

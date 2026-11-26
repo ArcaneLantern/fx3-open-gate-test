@@ -1,0 +1,462 @@
+{
+ "build": "fx3_702",
+ "camera": "ILME-FX3 (FX3), firmware 7.02",
+ "design": "ogfilesi2560_fx3_v2",
+ "title": "A 3840 by 2560 file in XAVC S-I 4K (AVC intra 4:2:2 10-bit) at 23.98p, 25p and 29.97p: encoder request, descriptors and profiles; one step on top of the 3840x2560 open-gate state",
+ "generated_by": "build/build_ogfile_si.py",
+ "family": "si",
+ "format": "XAVC S-I 4K (AVC intra)",
+ "raster": [
+  3840,
+  2560
+ ],
+ "rates": [
+  "23.98p",
+  "25p",
+  "29.97p"
+ ],
+ "goes_with": "the FX3 kit's 3840x2560 open-gate state at 23.98p, 25p and 29.97p (ogsq_fx3_v2, outsz2560_fx3_v1 in coprocessor RAM; ogfile2560_hs_s_fx3_v3 on the main processor), applied as one more level 19 step (I19) of fx3_apply.py apply",
+ "apply_after": "ogfile2560_hs_s_fx3_v3",
+ "shape_of": "ogfile2560_hs_s_fx3_v3",
+ "artifact_sha256": {
+  "libmpr.so": "9aeef3b9edb3d011c0c90cd2387b3a47bd3b506ebfa57be39ad1a9729771b57c",
+  "av-cam.bin": "0cb7e03a59b4ec3d7633664ab0f7a9477892d1aaf442b9db83a7e9a62a49bdaf"
+ },
+ "summary": {
+  "libmpr.so": {
+   "sites": 1,
+   "bytes": 2,
+   "code_sites": 0
+  },
+  "av-cam.bin": {
+   "sites": 24,
+   "bytes": 60,
+   "code_sites": 0
+  }
+ },
+ "sites_by_kind": {
+  "L1-comb": 1,
+  "A1-desc": 6,
+  "A2-profile": 18
+ },
+ "level": "the stock level bytes are kept (51, Level 5.1), as the FX3's ogfile2560_hs_s_fx3_v1 / v2 keep XAVC S 4K's",
+ "encoder_cores": "both (UseCore 2), as every reachable stock XAVC S-I 4K descriptor",
+ "memory": {
+  "unit_type": "4 (intra above 8,847,360 pixels; the FX3's memory function 0x21dd54 is the A7 IV's 0x2136c4, emulated in build/emu_ogfilesi_fx3.py)",
+  "row_4_ids": [
+   "0x486",
+   "0x474",
+   "0x477",
+   "0x47a"
+  ],
+  "row_4_is_stock": true,
+  "note": "no memory-class site: row 4 is the 4K class's in stock; row 3 (long GOP) is not used by intra"
+ },
+ "rule_checked_against_sonys_s_i_profiles": {
+  "si_profiles_checked": 60,
+  "rasters": [
+   [
+    1920,
+    1080
+   ],
+   [
+    3840,
+    2160
+   ],
+   [
+    4096,
+    2160
+   ]
+  ],
+  "rule": "+0x4c = 1.5 x width and +0x56 = half the height in whole 16-row macroblock rows (rounded down), in every XAVC S-I profile",
+  "twins": "24 pairs (105xxx UseCore 2, 205xxx UseCore 0) that differ only in key, +0x34, +0x38/+0x3c and UseCore (none of them read by the matcher); the matcher reaches the 105xxx row first in every pair"
+ },
+ "while_applied": [
+  "XAVC S-I 4K at 23.98p, 25p and 29.97p records 3840x2560; at 50p/59.94p the request says 3840x2560 and finds no descriptor: refused at encoder open (do not use them)",
+  "XAVC S-I HD and every other format are not touched by this step",
+  "the picture bit budget is the menu's (240M at 24p, 250M at 25p, 300M at 30p): the same bits for a bigger picture",
+  "the MP4 headers say what the kit's step L19 makes them say for AVC 3840-wide formats (3840x2560 with ogfile2560_hs_s_fx3_v2; 3840x2160 with --no-meta, the first kit's v1); Sony's XML says 3840x2160"
+ ],
+ "descriptors": [
+  {
+   "descriptor": 112,
+   "family": "si",
+   "format": "4:2:2 10-bit intra",
+   "rate": "29.97p",
+   "coding_rate_code": 2,
+   "input_rate": 0,
+   "quality_class": 12,
+   "f0c": 0,
+   "profile_key": 105204,
+   "pred_mode": 0,
+   "use_core": 2,
+   "plus_38_3c": [
+    2,
+    8
+   ],
+   "level_byte": 51,
+   "picture_bits": 16076800,
+   "bit_rate_millions": 481.8,
+   "twin_never_reached": 164
+  },
+  {
+   "descriptor": 113,
+   "family": "si",
+   "format": "4:2:2 10-bit intra",
+   "rate": "25p",
+   "coding_rate_code": 3,
+   "input_rate": 0,
+   "quality_class": 13,
+   "f0c": 0,
+   "profile_key": 105205,
+   "pred_mode": 0,
+   "use_core": 2,
+   "plus_38_3c": [
+    2,
+    8
+   ],
+   "level_byte": 51,
+   "picture_bits": 16076800,
+   "bit_rate_millions": 401.9,
+   "twin_never_reached": 165
+  },
+  {
+   "descriptor": 114,
+   "family": "si",
+   "format": "4:2:2 10-bit intra",
+   "rate": "23.98p",
+   "coding_rate_code": 5,
+   "input_rate": 0,
+   "quality_class": 14,
+   "f0c": 0,
+   "profile_key": 105206,
+   "pred_mode": 0,
+   "use_core": 2,
+   "plus_38_3c": [
+    2,
+    8
+   ],
+   "level_byte": 51,
+   "picture_bits": 16076800,
+   "bit_rate_millions": 385.5,
+   "twin_never_reached": 166
+  },
+  {
+   "descriptor": 115,
+   "family": "si",
+   "format": "4:2:2 10-bit intra",
+   "rate": "29.97p",
+   "coding_rate_code": 2,
+   "input_rate": 0,
+   "quality_class": 15,
+   "f0c": 0,
+   "profile_key": 105207,
+   "pred_mode": 0,
+   "use_core": 2,
+   "plus_38_3c": [
+    2,
+    7
+   ],
+   "level_byte": 51,
+   "picture_bits": 10080256,
+   "bit_rate_millions": 302.1,
+   "twin_never_reached": 167
+  },
+  {
+   "descriptor": 116,
+   "family": "si",
+   "format": "4:2:2 10-bit intra",
+   "rate": "25p",
+   "coding_rate_code": 3,
+   "input_rate": 0,
+   "quality_class": 18,
+   "f0c": 0,
+   "profile_key": 105208,
+   "pred_mode": 0,
+   "use_core": 2,
+   "plus_38_3c": [
+    2,
+    7
+   ],
+   "level_byte": 51,
+   "picture_bits": 10080256,
+   "bit_rate_millions": 252.0,
+   "twin_never_reached": 168
+  },
+  {
+   "descriptor": 117,
+   "family": "si",
+   "format": "4:2:2 10-bit intra",
+   "rate": "23.98p",
+   "coding_rate_code": 5,
+   "input_rate": 0,
+   "quality_class": 19,
+   "f0c": 0,
+   "profile_key": 105209,
+   "pred_mode": 0,
+   "use_core": 2,
+   "plus_38_3c": [
+    2,
+    7
+   ],
+   "level_byte": 51,
+   "picture_bits": 10080256,
+   "bit_rate_millions": 241.7,
+   "twin_never_reached": 169
+  }
+ ],
+ "patches": [
+  {
+   "binary": "libmpr.so",
+   "kind": "L1-comb",
+   "file_off": "0x2cb1e6",
+   "va": "0x2cb1e6",
+   "old": "7008",
+   "new": "000a",
+   "note": "g_videoParamComb row 9 (XAVC S-I 4K, AVC intra 4:2:2 10-bit): height 2160 -> 2560 (the encoder request's height)",
+   "code": false
+  },
+  {
+   "binary": "av-cam.bin",
+   "kind": "A1-desc",
+   "file_off": "0x399088",
+   "va": "0xffffffc001399088",
+   "old": "7008",
+   "new": "000a",
+   "note": "descriptor #112 (XAVC S-I 4K, 4:2:2 10-bit, 29.97p, quality class 12, key 105204, UseCore 2): height +0x80 -> 2560",
+   "code": false
+  },
+  {
+   "binary": "av-cam.bin",
+   "kind": "A2-profile",
+   "file_off": "0x3b439e",
+   "va": "0xffffffc0013b439e",
+   "old": "7008",
+   "new": "000a",
+   "note": "profile key 105204: raster height +0x06 -> 2560",
+   "code": false
+  },
+  {
+   "binary": "av-cam.bin",
+   "kind": "A2-profile",
+   "file_off": "0x3b43d0",
+   "va": "0xffffffc0013b43d0",
+   "old": "70080000",
+   "new": "000a0000",
+   "note": "profile key 105204: raster height +0x38 -> 2560",
+   "code": false
+  },
+  {
+   "binary": "av-cam.bin",
+   "kind": "A2-profile",
+   "file_off": "0x3b43ee",
+   "va": "0xffffffc0013b43ee",
+   "old": "3004",
+   "new": "0005",
+   "note": "profile key 105204: rows for the first core +0x56: 1072 -> 1280 (half the picture in whole 16-row macroblock rows)",
+   "code": false
+  },
+  {
+   "binary": "av-cam.bin",
+   "kind": "A1-desc",
+   "file_off": "0x399118",
+   "va": "0xffffffc001399118",
+   "old": "7008",
+   "new": "000a",
+   "note": "descriptor #113 (XAVC S-I 4K, 4:2:2 10-bit, 25p, quality class 13, key 105205, UseCore 2): height +0x80 -> 2560",
+   "code": false
+  },
+  {
+   "binary": "av-cam.bin",
+   "kind": "A2-profile",
+   "file_off": "0x3b449e",
+   "va": "0xffffffc0013b449e",
+   "old": "7008",
+   "new": "000a",
+   "note": "profile key 105205: raster height +0x06 -> 2560",
+   "code": false
+  },
+  {
+   "binary": "av-cam.bin",
+   "kind": "A2-profile",
+   "file_off": "0x3b44d0",
+   "va": "0xffffffc0013b44d0",
+   "old": "70080000",
+   "new": "000a0000",
+   "note": "profile key 105205: raster height +0x38 -> 2560",
+   "code": false
+  },
+  {
+   "binary": "av-cam.bin",
+   "kind": "A2-profile",
+   "file_off": "0x3b44ee",
+   "va": "0xffffffc0013b44ee",
+   "old": "3004",
+   "new": "0005",
+   "note": "profile key 105205: rows for the first core +0x56: 1072 -> 1280 (half the picture in whole 16-row macroblock rows)",
+   "code": false
+  },
+  {
+   "binary": "av-cam.bin",
+   "kind": "A1-desc",
+   "file_off": "0x3991a8",
+   "va": "0xffffffc0013991a8",
+   "old": "7008",
+   "new": "000a",
+   "note": "descriptor #114 (XAVC S-I 4K, 4:2:2 10-bit, 23.98p, quality class 14, key 105206, UseCore 2): height +0x80 -> 2560",
+   "code": false
+  },
+  {
+   "binary": "av-cam.bin",
+   "kind": "A2-profile",
+   "file_off": "0x3b459e",
+   "va": "0xffffffc0013b459e",
+   "old": "7008",
+   "new": "000a",
+   "note": "profile key 105206: raster height +0x06 -> 2560",
+   "code": false
+  },
+  {
+   "binary": "av-cam.bin",
+   "kind": "A2-profile",
+   "file_off": "0x3b45d0",
+   "va": "0xffffffc0013b45d0",
+   "old": "70080000",
+   "new": "000a0000",
+   "note": "profile key 105206: raster height +0x38 -> 2560",
+   "code": false
+  },
+  {
+   "binary": "av-cam.bin",
+   "kind": "A2-profile",
+   "file_off": "0x3b45ee",
+   "va": "0xffffffc0013b45ee",
+   "old": "3004",
+   "new": "0005",
+   "note": "profile key 105206: rows for the first core +0x56: 1072 -> 1280 (half the picture in whole 16-row macroblock rows)",
+   "code": false
+  },
+  {
+   "binary": "av-cam.bin",
+   "kind": "A1-desc",
+   "file_off": "0x399238",
+   "va": "0xffffffc001399238",
+   "old": "7008",
+   "new": "000a",
+   "note": "descriptor #115 (XAVC S-I 4K, 4:2:2 10-bit, 29.97p, quality class 15, key 105207, UseCore 2): height +0x80 -> 2560",
+   "code": false
+  },
+  {
+   "binary": "av-cam.bin",
+   "kind": "A2-profile",
+   "file_off": "0x3b469e",
+   "va": "0xffffffc0013b469e",
+   "old": "7008",
+   "new": "000a",
+   "note": "profile key 105207: raster height +0x06 -> 2560",
+   "code": false
+  },
+  {
+   "binary": "av-cam.bin",
+   "kind": "A2-profile",
+   "file_off": "0x3b46d0",
+   "va": "0xffffffc0013b46d0",
+   "old": "70080000",
+   "new": "000a0000",
+   "note": "profile key 105207: raster height +0x38 -> 2560",
+   "code": false
+  },
+  {
+   "binary": "av-cam.bin",
+   "kind": "A2-profile",
+   "file_off": "0x3b46ee",
+   "va": "0xffffffc0013b46ee",
+   "old": "3004",
+   "new": "0005",
+   "note": "profile key 105207: rows for the first core +0x56: 1072 -> 1280 (half the picture in whole 16-row macroblock rows)",
+   "code": false
+  },
+  {
+   "binary": "av-cam.bin",
+   "kind": "A1-desc",
+   "file_off": "0x3992c8",
+   "va": "0xffffffc0013992c8",
+   "old": "7008",
+   "new": "000a",
+   "note": "descriptor #116 (XAVC S-I 4K, 4:2:2 10-bit, 25p, quality class 18, key 105208, UseCore 2): height +0x80 -> 2560",
+   "code": false
+  },
+  {
+   "binary": "av-cam.bin",
+   "kind": "A2-profile",
+   "file_off": "0x3b479e",
+   "va": "0xffffffc0013b479e",
+   "old": "7008",
+   "new": "000a",
+   "note": "profile key 105208: raster height +0x06 -> 2560",
+   "code": false
+  },
+  {
+   "binary": "av-cam.bin",
+   "kind": "A2-profile",
+   "file_off": "0x3b47d0",
+   "va": "0xffffffc0013b47d0",
+   "old": "70080000",
+   "new": "000a0000",
+   "note": "profile key 105208: raster height +0x38 -> 2560",
+   "code": false
+  },
+  {
+   "binary": "av-cam.bin",
+   "kind": "A2-profile",
+   "file_off": "0x3b47ee",
+   "va": "0xffffffc0013b47ee",
+   "old": "3004",
+   "new": "0005",
+   "note": "profile key 105208: rows for the first core +0x56: 1072 -> 1280 (half the picture in whole 16-row macroblock rows)",
+   "code": false
+  },
+  {
+   "binary": "av-cam.bin",
+   "kind": "A1-desc",
+   "file_off": "0x399358",
+   "va": "0xffffffc001399358",
+   "old": "7008",
+   "new": "000a",
+   "note": "descriptor #117 (XAVC S-I 4K, 4:2:2 10-bit, 23.98p, quality class 19, key 105209, UseCore 2): height +0x80 -> 2560",
+   "code": false
+  },
+  {
+   "binary": "av-cam.bin",
+   "kind": "A2-profile",
+   "file_off": "0x3b489e",
+   "va": "0xffffffc0013b489e",
+   "old": "7008",
+   "new": "000a",
+   "note": "profile key 105209: raster height +0x06 -> 2560",
+   "code": false
+  },
+  {
+   "binary": "av-cam.bin",
+   "kind": "A2-profile",
+   "file_off": "0x3b48d0",
+   "va": "0xffffffc0013b48d0",
+   "old": "70080000",
+   "new": "000a0000",
+   "note": "profile key 105209: raster height +0x38 -> 2560",
+   "code": false
+  },
+  {
+   "binary": "av-cam.bin",
+   "kind": "A2-profile",
+   "file_off": "0x3b48ee",
+   "va": "0xffffffc0013b48ee",
+   "old": "3004",
+   "new": "0005",
+   "note": "profile key 105209: rows for the first core +0x56: 1072 -> 1280 (half the picture in whole 16-row macroblock rows)",
+   "code": false
+  }
+ ],
+ "optional_sites": [],
+ "status": "built from the FX3 7.02 files and emulated on its own code (build/emu_ogfilesi_fx3.py); never run on an FX3 or on an A7 IV"
+}
