@@ -43,6 +43,22 @@ done
 for L in 19 20; do
   "${CC[@]}" -DLEVEL=$L '-DMP_H="expected_mp_ogfilesi2560_fx3_v2.h"' -DAVCAM_PHYS=0x401000000UL readcheck.c -o "$H/libJit_fx3_I$L.so"
 done
+# The 4224 x 2816 state (2026-11-28; modding/FX3_PORT.md): the same levels with other tables. H = sensor side with the first stage passed one to one
+# (ogh2816_fx3_v1: v2's cells, MULTI_REC), D = output planes (dmm7slot_fx3_v1), K = output size and encoder side at 4224 x 2816, J = the encoder side
+# without the MP4 header size (K20 puts it back too), R = the encoder side with the 100M settings at 300 Mbps.
+for L in 5 6; do
+  "${CC[@]}" -DLEVEL=$L '-DSITES_H="expected_sites_ogh2816_fx3_v1.h"' '-DDESIGN_LABEL="ogh2816_fx3_v1"' -DIMAGER=0x127ab68UL -DCTRL_DRVPARAM=0x698U \
+    readcheck.c "$SEN" -o "$H/libJit_fx3_H$L.so"
+done
+for L in 16 17; do
+  "${CC[@]}" -DLEVEL=$L '-DWORDS_H="expected_words_dmm7slot_fx3_v1.h"' readcheck.c "$SEN" -o "$H/libJit_fx3_D$L.so"
+  "${CC[@]}" -DLEVEL=$L '-DWORDS_H="expected_words_outsz4224_fx3_v1.h"' readcheck.c "$SEN" -o "$H/libJit_fx3_K$L.so"
+done
+for L in 19 20; do
+  "${CC[@]}" -DLEVEL=$L '-DMP_H="expected_mp_ogfile4224_fx3_v1.h"' -DAVCAM_PHYS=0x401000000UL readcheck.c -o "$H/libJit_fx3_K$L.so"
+  "${CC[@]}" -DLEVEL=$L '-DMP_H="expected_mp_ogfile4224r300_fx3_v1.h"' -DAVCAM_PHYS=0x401000000UL readcheck.c -o "$H/libJit_fx3_R$L.so"
+done
+"${CC[@]}" -DLEVEL=19 '-DMP_H="expected_mp_ogfile4224nm_fx3_v1.h"' -DAVCAM_PHYS=0x401000000UL readcheck.c -o "$H/libJit_fx3_J19.so"
 cd "$H"
 for L in 5 6 16 17 19 20; do echo "$(sha256sum libJit_fx3_L$L.so | cut -d' ' -f1) $(stat -c %s libJit_fx3_L$L.so) level $L"; done
-for N in N19 N20 S16 S17 P29 P30 I19 I20 O5; do echo "$(sha256sum libJit_fx3_$N.so | cut -d' ' -f1) $(stat -c %s libJit_fx3_$N.so) step $N"; done
+for N in N19 N20 S16 S17 P29 P30 I19 I20 O5 H5 H6 D16 D17 K16 K17 K19 K20 J19 R19 R20; do echo "$(sha256sum libJit_fx3_$N.so | cut -d' ' -f1) $(stat -c %s libJit_fx3_$N.so) step $N"; done

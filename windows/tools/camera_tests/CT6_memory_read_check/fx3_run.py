@@ -73,10 +73,26 @@ WRITE_STEPS = {
     # 2026-11-26: ogfilesi2560_fx3_v2 = v1 + the two 29.97p descriptors and their profiles. I20 puts back v2 or v1.
     "I19": ("libJit_fx3_I19.so", "3a553194f83439eb8c3fffaa545535ee656515378b52b10d37a8737d5831fe6a", "apply XAVC S-I 4K at 3840x2560: ogfilesi2560_fx3_v2 (23.98p, 25p, 29.97p: the S-I encoder request, 6 descriptors and their profiles: 24 + 1 sites)"),
     "I20": ("libJit_fx3_I20.so", "0754c501aadb37c9db9e614dd93751bee1717dabd90c39588ea9173cd1ae66f2", "put back XAVC S-I 4K: ogfilesi2560_fx3_v2 (or v1)"),
+    # THE 4224x2816 STATE (2026-11-28; NOT RUN ON A CAMERA): the central 4224 x 2816 of the sensor's 4240 x 2832, pixel for pixel; the A7S III kit's
+    # state of the same day at the FX3's addresses (modding/FX3_PORT.md). The same levels with other tables: H = the sensor side with the first stage
+    # passed one to one (L5's cells, 24p and 25p/30p, NTSC or PAL), D = the output planes, K = output size and encoder side, J = the encoder side
+    # without the MP4 header size, R = the encoder side with the 100M settings at 300 Mbps.
+    "H5": ("libJit_fx3_H5.so", "7666f206965f7adfaa7806fd8dfad7fb994ed45797254c68dd76ac5e11cc3a9a", "apply the sensor-side design ogh2816_fx3_v1 (L5's sensor cells; the two records with a first stage of 2832 rows passed one to one; stored records 27/32, NTSC or PAL)"),
+    "H6": ("libJit_fx3_H6.so", "7613ccb8f9f8ad774693ae79e716498068effa220e7058b28a53a3220ff6d486", "put back the sensor-side design ogh2816_fx3_v1"),
+    "D16": ("libJit_fx3_D16.so", "5fa5a95c44d070d0cf484041f5342f77df84057377fd9b1fd0b06af148e25110", "apply the output planes dmm7slot_fx3_v1 (ten words: seven 4K planes of 14,942,208 bytes, as the FX6 kit's memory step)"),
+    "D17": ("libJit_fx3_D17.so", "dfad781d74c8b36e84c2d12f82244c78be5d97dedc3110716a57c4a4544a8d75", "put back the output planes dmm7slot_fx3_v1"),
+    "K16": ("libJit_fx3_K16.so", "a6f89180441a3099323b3494a67fb3e93b61a009d0874e5202888db75c30cee1", "apply the output size outsz4224_fx3_v1 (one word: 4224 x 2816)"),
+    "K17": ("libJit_fx3_K17.so", "952f9c973094b6625f35c9f0147fc408c95d68a2aa181cb59794c54ecc76bf5f", "put back the output size outsz4224_fx3_v1"),
+    "K19": ("libJit_fx3_K19.so", "baee9959b7e7f34f6808fe3df02780d5d628b5a28f6495fad06185bb4d08b706", "apply the encoder-side design ogfile4224_fx3_v1 (23.98p, 25p, 29.97p: 303 + 13 sites: 4224 x 2816 on both encoder cores, and the MP4 header size)"),
+    "K20": ("libJit_fx3_K20.so", "4e3483ad3d08a0d46d13316864f2a79f14540d9a2fc8d229b7fb51c938916d74", "put back the encoder-side design ogfile4224_fx3_v1 (also after J19)"),
+    "J19": ("libJit_fx3_J19.so", "711a334e1b6b2f508c5708d2b831c9371fe14409daacaebb3fe974d234a8d426", "apply the encoder-side design ogfile4224nm_fx3_v1 (303 + 4 sites, without the MP4 header size)"),
+    "R19": ("libJit_fx3_R19.so", "5c94f52983d131a6c25d9b3ea00f0aac6eb98ccbc2591e5024243957525ad68e", "apply the encoder-side design ogfile4224r300_fx3_v1 (351 + 13 sites: as K19, the 100M record settings at 300 Mbps)"),
+    "R20": ("libJit_fx3_R20.so", "bbca502306775622b5e5c7e6a006ad5ffa64fdbcf97a5c342329c999e065eab4", "put back the encoder-side design ogfile4224r300_fx3_v1"),
 }
 PINS.update({k: v[:2] for k, v in WRITE_STEPS.items()})
-LEVELS.update({k: {"L": 200, "S": 300, "N": 500, "P": 600, "I": 700, "O": 800}[k[0]] + int(k[1:]) for k in WRITE_STEPS})
+LEVELS.update({k: {"L": 200, "S": 300, "N": 500, "P": 600, "I": 700, "O": 800, "H": 900, "D": 1000, "K": 1100, "J": 1200, "R": 1300}[k[0]] + int(k[1:]) for k in WRITE_STEPS})
 WHICH = "check"
+FIT_4224 = [4240, 2816, 8, 0, 4224, 2816, 0, 0, 0, 0]   # the second scaler's block in the 4224x2816 state (build/build_og_fx3_native.py, the firmware's own fit)
 # Libraries this kit published before and no longer runs. With PINS they are the files a run may delete from the camera's service partition
 # when an earlier session left one behind (R.KNOWN_LIBS; on 2026-11-26 an FX3 tester's cut-off L19 session blocked every later run).
 EARLIER_LIBS = {
@@ -232,7 +248,8 @@ def decode_pages(pages):
         st["division_units"] = [{"in_start": struct.unpack_from("<I", dv, k * 0x150 + 0xC)[0], "in_width": struct.unpack_from("<I", dv, k * 0x150 + 0x10)[0],
                                  "out_width": struct.unpack_from("<I", dv, k * 0x150 + 0x20)[0]} for k in range(4)]
     seen = {}
-    pairs = {(4240, 2832), (4240, 2392), (4240, 2385), (4240, 2848), (4240, 2408), (3840, 2560), (3840, 2160), (1920, 1080), (2144, 2392), (2096, 2392), (2176, 2408)}
+    pairs = {(4240, 2832), (4240, 2392), (4240, 2385), (4240, 2848), (4240, 2408), (3840, 2560), (3840, 2160), (1920, 1080), (2144, 2392), (2096, 2392), (2176, 2408),
+             (4224, 2816), (4240, 2816), (4264, 2832), (2144, 2816), (2096, 2816), (2176, 2832), (2128, 2832)}      # the 4224x2816 state
     for addr, (name, blob) in sorted(pages.items()):
         if name not in ("context", "resizework", "resizestate"):
             continue
@@ -435,7 +452,8 @@ def report(session, facts, which):
         for ln in lines:
             session.say(ln)
         return
-    lines = ["FX3 7.02 %s, %s" % (which, time.strftime("%Y-%m-%d %H:%M:%S")), f["header"], f["verdict"],
+    note = state_4224_note(f)
+    lines = ["FX3 7.02 %s, %s" % (which, time.strftime("%Y-%m-%d %H:%M:%S")), f["header"], f["verdict"]] + ([note] if note else []) + [
              "identity: %d same, %d differ" % (f["identity_same"], f["identity_differs"]),
              "kernel: %s" % f["kernel_version"], "command line: %s" % f["kernel_command_line"]]
     for s in f["coprocessor_sites"]:
@@ -464,6 +482,9 @@ def report(session, facts, which):
             bl = ss.get("second_scaler_block")
             if bl:
                 lines.append("  block %s: words %s -> takes %s x %s from %s" % (bl["address"], bl["words"], bl["size"][0], bl["size"][1], bl["start"]))
+                if bl["words"][:2] == [4240, 2816]:      # the 4224x2816 state's front end (ogh2816_fx3_v1)
+                    lines.append("    the 4224x2816 state as designed: words %s = 4224 x 2816 from (8, 0), scale 1: %s"
+                                 % (FIT_4224, "EQUAL" if bl["words"] == FIT_4224 else "NOT equal"))
             if "second_scaler_input" in ss:
                 lines.append("  input words: %s" % ss["second_scaler_input"])
             rw = ss.get("resize_work")
@@ -500,6 +521,16 @@ def report(session, facts, which):
         session.say(ln)
 
 
+def state_4224_note(f):
+    """One line when a check or dump was taken with the 4224x2816 state applied. This helper knows the 3840x2560 state's bytes only, so its
+    verdict then reads NOT READY; the output-size word is the one place where it shows the other state's value."""
+    oz = next((s for s in f.get("coprocessor_sites", []) if s["name"] == "outsize"), None)
+    if not oz or oz.get("shown") != struct.pack("<HH", 4224, 2816).hex():
+        return None
+    return ("NOTE: the output size word holds 4224 x 2816: the 4224x2816 state is applied. This helper compares with the 3840x2560 state, so NOT READY is "
+            "what it says here; each step of the apply checked its own bytes.")
+
+
 def last_saved_sha():
     """The SHA-256 of the result the newest saved session of this kit fetched, or None."""
     root = c.PRIVATE_ROOT
@@ -524,7 +555,7 @@ def main():
     ap.add_argument("--remove-library", metavar="SHA256", help="a libJit.so left on the camera's service partition that is none of this kit's: delete it first, "
                                                                "only if its SHA-256 is this (a library of this kit is deleted without being named)")
     ap.add_argument("--firmware-shown")
-    ap.add_argument("--writes-memory", action="store_true", help="needed for a write step (L5, L6, O5, L16, L17, L19, L20, N19, S16, S17, P29, P30, I19, I20): it changes the running camera's memory")
+    ap.add_argument("--writes-memory", action="store_true", help="needed for a write step (L5, L6, O5, L16, L17, L19, L20, N19, S16, S17, P29, P30, I19, I20, and the 4224x2816 state's H, D, K, J, R steps): it changes the running camera's memory")
     a = ap.parse_args()
     if a.which in WRITE_STEPS and a.go and not (a.dry_run or a.selftest) and not a.writes_memory:
         raise SystemExit("%s is a write step: %s. It needs --writes-memory as well. Use fx3_apply.py. Nothing was sent." % (a.which, WRITE_STEPS[a.which][2]))

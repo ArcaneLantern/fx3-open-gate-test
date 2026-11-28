@@ -4,6 +4,9 @@
   python fx3_apply.py putback  [--no-screen] [--no-si] [--dry-run]
   python fx3_apply.py screen | screen-putback  [--dry-run]
   python fx3_apply.py playback | playback-putback  [--dry-run]      (optional, NOT RUN ON ANY CAMERA: in-camera playback)
+  python fx3_apply.py apply4224   [--no-screen] [--no-meta | --rate300] [--dry-run]     the 4224x2816 state (NOT RUN ON A CAMERA YET)
+  python fx3_apply.py putback4224 [--no-screen] [--rate300] [--dry-run]
+  python fx3_apply.py realrows | realrows-putback [--no-screen] [--no-si] [--no-meta] [--dry-run]   its sensor step alone, into the 3840x2560 file
   (apply and screen take --no-movie-session to leave out the closing read-only session)
 
 The FX3 counterpart of s3_apply.py: the A7S III's default state (the owner, 2026-11-23), which records a true 3840x2560 file of
@@ -42,6 +45,22 @@ entered from stills, until a read-only session ends in movie mode or a recording
 script ends by asking for movie mode (MODE button, then Movie with the control wheel) and an unplug and replug, and runs the
 read-only dump itself. Nothing is written in that session.
 
+THE 4224x2816 STATE (2026-11-28, built and emulated, NOT RUN ON A CAMERA; the A7S III kit's state of the same day at the FX3's addresses): the
+central 4224 x 2816 of the sensor's 4240 x 2832, pixel for pixel (8 columns and 8 rows left out at each edge; a 4240-wide picture is refused
+by the camera's scaler, whose two units each need a width that is a multiple of 32). XAVC HS 4K and XAVC S 4K at 24p, 25p and 30p.
+  apply4224  four steps, then the screen step: D16 output planes (dmm7slot_fx3_v1: the planes of the 4K layout grow from 13,271,040 to
+             14,942,208 bytes, as the FX6 kit's memory step), H5 sensor side with the first stage passed one to one (ogh2816_fx3_v1: L5's
+             sensor cells; front end 4240 x 2816; sampling ratio 27/32), K16 output size 4224 x 2816 (outsz4224_fx3_v1), K19 encoder side on
+             both encoder cores and the MP4 header size (ogfile4224_fx3_v1). --no-meta: J19 for K19 (the MP4 headers keep 3840x2160).
+             --rate300: R19 for K19 (the 100M record settings record at 300 Mbps; use a V60 / V90 or CFexpress card).
+             There is NO XAVC S-I step in this state: do not record XAVC S-I 4K while it is applied.
+  putback4224  the reverse: S17, K20 (R20 with --rate300), K17, H6, D17.
+  realrows   apply with H5 in place of L5: the new sensor side with the proven 3840x2560 output size and encoder steps (and S16, I19 as
+             apply). The file is 3840 x 2560, made from 4224 x 2816 real pixels at scale 1.1 both ways (the default state squeezes the rows
+             to 2,392 first). It is the smaller test: only H5 is new in it. realrows-putback undoes it.
+The three states share sites: put one back (or pull the battery for 10 seconds) before applying another. A step of one state on a camera
+holding another writes nothing and says so.
+
 Rules it keeps:
 - It starts only if the newest saved read-only check of this kit says VERDICT READY.
 - It stops at the first step that does not end in DONE or NOTHING TO DO, and says what state that leaves.
@@ -65,7 +84,13 @@ import fx3_run  # noqa: E402
 
 FIRMWARE = fx3_run.FIRMWARE
 STEPS = {"apply": ("L5", "L16", "L19"), "putback": ("L20", "L17", "L6"), "screen": ("S16",), "screen-putback": ("S17",),
-         "playback": ("P29",), "playback-putback": ("P30",)}
+         "playback": ("P29",), "playback-putback": ("P30",),
+         # the 4224x2816 state (memory first, as the FX6 kit) and its sensor step alone into the 3840x2560 file
+         "apply4224": ("D16", "H5", "K16", "K19"), "putback4224": ("K20", "K17", "H6", "D17"),
+         "realrows": ("H5", "L16", "L19"), "realrows-putback": ("L20", "L17", "H6")}
+APPLIES = {"apply": "putback", "apply4224": "putback4224", "realrows": "realrows-putback"}     # the open-gate states and their put backs
+SI_STATES = ("apply", "putback", "realrows", "realrows-putback")                                  # the states with the XAVC S-I step (3840x2560 output)
+FIT_4224 = fx3_run.FIT_4224
 RUNNER = HERE / "fx3_run.py"
 LISTER = HERE.parent / "CT1_usb_first_contact" / "ct1_stage2_service.py"
 STILL = "a still-image mode (press MODE, choose Program Auto, Aperture Priority, Shutter Priority or Manual Exposure with the control wheel, press its centre)"
@@ -154,7 +179,7 @@ def wait_for_replug(timeout=900):
     return True
 
 
-def movie_session():
+def movie_session(what="apply"):
     """The closing read-only session, taken in movie mode: the camera starts its picture in movie mode when it ends."""
     say()
     say("=" * 78)
@@ -185,6 +210,12 @@ def movie_session():
     if column != 1:                                  # the open-gate 4K modes (24p, and 30p/25p since 2026-11-26) run sensor register column 1
         say("NOTE: before this session the sensor was not in an open-gate 4K mode (register column %s, not 1)." % column)
         say("      Was the camera in Movie, at 4K 24p, 25p or 30p? If not: set it, replug, and run dump_info once more.")
+    if what in ("apply4224", "realrows"):
+        blk = ((decoded.get("scaler_state") or {}).get("second_scaler_block") or {}).get("words")
+        say("The second scaler's block reads %s; this state as designed: %s (4224 x 2816 from column 8, scale %s)."
+            % (blk, FIT_4224, "1" if what == "apply4224" else "1.1 into 3840 x 2560"))
+        say("NOT READY in the lines above is expected here: this read-only helper compares with the default state's bytes.")
+        say("Each step of the apply checked its own bytes. Before another apply: battery out for 10 seconds, then check_readonly.")
     panel = (decoded.get("display") or {}).get("panel_types")
     if panel:
         say("The rear panel reports type %d (%s). Please send this folder: it settles the FX3's panel shape." % (panel["rear_0x14909e4"], panel["rear_aspect"]))
@@ -217,26 +248,35 @@ def main():
     ap.add_argument("--no-movie-session", action="store_true", help="with apply or screen: leave out the closing read-only session in movie mode")
     ap.add_argument("--no-meta", action="store_true", help="with apply: the first kit's encoder step (N19), whose MP4 headers keep saying 3840x2160")
     ap.add_argument("--only-24p", action="store_true", help="with apply: the earlier sensor step (O5: 24p only, NTSC only; the one that ran on FX3s) for L5")
+    ap.add_argument("--rate300", action="store_true", help="with apply4224 or putback4224: the encoder step R19 / R20, whose 100M record settings record at 300 Mbps")
     a = ap.parse_args()
     steps = STEPS[a.what]
-    if (a.no_screen or a.no_si) and a.what not in ("apply", "putback"):
-        raise SystemExit("--no-screen and --no-si go with apply or putback. Nothing was sent.")
-    if a.no_meta and a.what != "apply":
-        raise SystemExit("--no-meta goes with apply (the put back L20 puts back either encoder step). Nothing was sent.")
+    state = a.what in APPLIES or a.what in APPLIES.values()          # an open-gate state or its put back
+    if a.no_screen and not state:
+        raise SystemExit("--no-screen goes with the apply or the put back of a state. Nothing was sent.")
+    if a.no_si and a.what not in SI_STATES:
+        raise SystemExit("--no-si goes with apply, putback, realrows or realrows-putback (the 4224x2816 state has no XAVC S-I step). Nothing was sent.")
+    if a.no_meta and a.what not in APPLIES:
+        raise SystemExit("--no-meta goes with apply, apply4224 or realrows (the put back L20 / K20 puts back either encoder step). Nothing was sent.")
+    if a.rate300 and (a.what not in ("apply4224", "putback4224") or a.no_meta):
+        raise SystemExit("--rate300 goes with apply4224 or putback4224, and not with --no-meta. Nothing was sent.")
     if a.only_24p and a.what != "apply":
         raise SystemExit("--only-24p goes with apply (the put back L6 puts back either sensor step). Nothing was sent.")
     if a.no_meta:
-        steps = tuple("N19" if k == "L19" else k for k in steps)
+        steps = tuple({"L19": "N19", "K19": "J19"}.get(k, k) for k in steps)
+    if a.rate300:
+        steps = tuple({"K19": "R19", "K20": "R20"}.get(k, k) for k in steps)
     if a.only_24p:
         steps = tuple("O5" if k == "L5" else k for k in steps)
     with_screen = not a.no_screen
-    if a.what in ("apply", "putback") and with_screen:
-        steps = steps + STEPS["screen"] if a.what == "apply" else STEPS["screen-putback"] + steps
-    with_si = not a.no_si                             # XAVC S-I 4K: last on apply (a refusal there leaves the other steps applied), first on put back
-    if a.what in ("apply", "putback") and with_si:
-        steps = steps + ("I19",) if a.what == "apply" else ("I20",) + steps
-    applying = a.what in ("apply", "screen", "playback")
-    closing = a.what in ("apply", "screen")           # the closing read-only session in Movie: only after the open-gate or screen steps
+    if state and with_screen:
+        steps = steps + STEPS["screen"] if a.what in APPLIES else STEPS["screen-putback"] + steps
+    with_si = not a.no_si and a.what in SI_STATES    # XAVC S-I 4K: last on apply (a refusal there leaves the other steps applied), first on put back
+    if with_si:
+        steps = steps + ("I19",) if a.what in APPLIES else ("I20",) + steps
+    applying = a.what in APPLIES or a.what in ("screen", "playback")
+    closing = a.what in APPLIES or a.what == "screen"  # the closing read-only session in Movie: only after the open-gate or screen steps
+    new_state = a.what in ("apply4224", "realrows")
     for k in steps:                                  # every library must be the pinned one before anything starts
         name, sha, _ = fx3_run.WRITE_STEPS[k]
         p = fx3_run.S3 / name
@@ -267,6 +307,13 @@ def main():
         say("  word of its decode table. Its library checks the whole code page against the firmware file, reads the processors' cache type,")
         say("  and refuses unless it can make every processor fetch the new instructions; it then writes the instructions first and the")
         say("  table word last (put back: the table word first). If anything is not as expected it writes nothing.")
+    elif a.what == "apply4224":
+        say("THE 4224x2816 STATE HAS NOT RUN ON A CAMERA YET (not on an FX3, not on the A7S III it was made for). Its sensor cells are step L5's;")
+        say("  new here: the output planes (D16; the same words ran on an FX6), the first stage passed one to one (H5), the output size (K16) and")
+        say("  the encoder side on both encoder cores (%s). If the camera stops, restarts or shows no picture: that is a result too; see below."
+            % ("R19, 300 Mbps" if a.rate300 else "J19" if a.no_meta else "K19"))
+    elif a.what == "realrows":
+        say("THIS TEST HAS NOT RUN ON A CAMERA YET. Only its first step (H5) is new: the output size and the encoder steps are the default state's.")
     elif applying:
         say("The first kit ran on an FX3 (2026-11-24): open gate recorded and the screen showed 3:2. New since then and not run yet: step L19")
         say("  also makes the MP4 headers say 3840x2560 (use --no-meta for the first kit's encoder step), and since 2026-11-26 the open gate")
@@ -278,11 +325,12 @@ def main():
     say("so KEEP THE CAMERA SWITCHED ON from now until the script says it is finished.")
     if a.what in ("playback", "playback-putback"):
         say("Before you go on: a charged battery, %s, and the camera NOT in playback (no clip open)." % STILL)
-    elif a.what == "apply":
+    elif a.what in APPLIES:
         say("Before you go on: %s, a charged battery," % STILL)
         say("and a camera that was cold booted and has not been in Movie or S&Q since. (If it starts in Movie: choose a still mode,")
         say("pull the battery for 10 seconds, put it back and switch on: it starts in the still mode.)")
-        say("(If the open-gate state is already applied in this power-on, its three steps will say NOTHING TO DO: that is fine.)")
+        say("(If this state is already applied in this power-on, its steps will say NOTHING TO DO: that is fine. If ANOTHER open-gate state is")
+        say(" applied, the first step that meets it stops and writes nothing: put that state back, or pull the battery for 10 seconds, first.)")
     else:
         say("Before you go on: a charged battery, and %s." % STILL)
     if input("Firmware version in the camera's menu: ").strip() != FIRMWARE:
@@ -311,10 +359,27 @@ def main():
             if left_behind():
                 say("This step's library may still be on the camera's service partition (a cold boot does not remove it). It is not loaded again")
                 say("  by itself, and the next run of any launcher of this kit deletes it before doing anything else.")
+            if new_state and n > 1:
+                say("(To undo the steps that passed without a cold boot: fx3_apply.py %s; a step with nothing to undo says NOTHING TO DO.)" % APPLIES[a.what])
             say("Please send the newest folders in camera_private.")
             raise SystemExit(1)
     say()
     say("All %d steps passed (%s)." % (len(steps), a.what))
+    if a.what == "apply4224":
+        say("THE 4224x2816 STATE. Record a few seconds in XAVC HS 4K at 24p first, stop, and check the clip on a computer; then XAVC S 4K.")
+        say("  Expected: a 4224 x 2816 file, the central 4224 x 2816 of the sensor pixel for pixel, at the record setting's bit rate%s;"
+            % (" (300 Mbps on the 100M settings)" if a.rate300 else ""))
+        say("  24p, and 30p (NTSC) / 25p (PAL). The MP4 headers %s."
+            % ("keep 3840x2160: MediaInfo shows the stream's 4224x2816" if a.no_meta else "say 4224x2816 (3:2); Sony's XML still says 3840x2160 16:9"))
+        say("  Do NOT record XAVC S-I 4K in this state (it has no S-I step), and do NOT play clips back on the camera (as in the default state).")
+        say("  Please report: does it record and stop by itself; the clip (or MediaInfo's text); whether some frames have a band of wrong rows at the")
+        say("  top or bottom (about 300 rows: a plane of the old size still in use; go to a still mode and back to Movie, or record again, and say if")
+        say("  it goes); the live view; anything the camera says. And send camera_private.")
+    elif a.what == "realrows":
+        say("THE REAL-ROWS TEST. Record a few seconds in XAVC HS 4K at 24p. Expected: a 3840 x 2560 file as in the default state, a little")
+        say("  sharper down the frame (2,816 real rows where the default state has 2,392), with 8 sensor columns and rows left out at each edge.")
+        say("  Do NOT play clips back on the camera. Please report: does it record; the clip; the live view; and send camera_private.")
+        say("  If this works, apply4224 is the next test.")
     if applying and a.what == "apply":
         if a.no_meta:
             say("The files' MP4 headers say 3840x2160 (--no-meta): editors may open them squeezed; a remux to 3840x2560 fixes that.")
@@ -333,7 +398,7 @@ def main():
         say("DO NOT PLAY CLIPS BACK ON THE CAMERA while it is applied: on two FX3s an open-gate clip showed 'unable to display', and")
         say("  a second try froze the camera until the battery was pulled. Check the clips on a computer. (The optional, untested")
         say("  playback step is meant to fix this: fx3_apply.py playback / playback_fix_apply.)")
-    if with_screen and a.what in ("apply", "screen"):
+    if with_screen and (a.what in APPLIES or a.what == "screen"):
         say("The screen step: in Movie the rear screen should now show the whole picture at 3:2. On a 4:3 screen (what the FX3's")
         say("  1.44M-dot panel is expected to be) there are thin black bars above and below; on a 3:2 screen it fills it. A circle should look round.")
         say("  De-Squeeze Display (MENU > Setup > Display Option > De-Squeeze Display) now de-squeezes the 3:2 picture:")
@@ -355,10 +420,10 @@ def main():
             say(">>> BEFORE you unplug: set %s. Then unplug USB." % MOVIE)
             say("    If the live view is glitchy: start and stop a short recording, or run dump_info in Movie.")
         else:
-            movie_session()
+            movie_session(a.what)
         say()
         say("Use only XAVC HS 4K, XAVC S 4K%s at %s while it is applied: 50p and faster are not open gate (they are refused when recording),"
-            % ("" if a.what != "apply" or not with_si else " or XAVC S-I 4K", "24p (23.98p)" if a.only_24p else "24p, or 30p (NTSC) / 25p (PAL)"))
+            % ("" if not with_si else " or XAVC S-I 4K", "24p (23.98p)" if a.only_24p else "24p, or 30p (NTSC) / 25p (PAL)"))
         say("  and on the A7S III 60p distorted the picture and crashed the camera.")
         say("If the camera stops or restarts: do NOT pull the battery yet. Choose a still mode, replug USB and run dump_info, then send camera_private.")
         say("To return to stock: battery out for 10 seconds.")

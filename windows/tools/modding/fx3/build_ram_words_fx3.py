@@ -1,6 +1,8 @@
 """Build `outsz2560_fx3_v1`: the FX3 7.02 counterpart of the A7S III's working `outsz2560_s3_v1` (one word of coprocessor RAM).
 
-  C:/Python313/python.exe -B build/build_ram_words_fx3.py
+  C:/Python313/python.exe -B build/build_ram_words_fx3.py                    (outsz2560_fx3_v1)
+  C:/Python313/python.exe -B build/build_ram_words_fx3.py --size 4224 2816     (outsz4224_fx3_v1, 2026-11-28: the 4224 x 2816 state; it goes with
+                                                                               dmm7slot_fx3_v1, whose planes hold the picture, and ogh2816_fx3_v1)
 
 The movie size table is filled at run time by 0x4008ec (the A7S III's 0x40af34 relinked: same 904-byte body, only
 relocated branch targets and MOVW/MOVT pairs differ). build/emu_size_table.py runs it on the FX3 image: base 0x13c3144,
@@ -11,6 +13,7 @@ Design only; never run on a camera.
 import hashlib
 import json
 import struct
+import sys
 from pathlib import Path
 
 import emu_size_table
@@ -21,27 +24,37 @@ SHA = "c90d00d807874a5309dc1b65b203287e83608ceee513cc57b53409333fb6bcba"
 
 
 def main():
+    global NAME
+    W, H = (int(x) for x in sys.argv[sys.argv.index("--size") + 1:sys.argv.index("--size") + 3]) if "--size" in sys.argv else (3840, 2560)
+    assert (W, H) in ((3840, 2560), (4224, 2816))
+    NAME = "outsz%d_fx3_v1" % (H if W == 3840 else W)
     t, rows, writes = emu_size_table.table(BUILD)
     r_t, r_rows, _ = emu_size_table.table(REF)
     assert t == 0x13C3190 and rows == r_rows, "the FX3 size table differs from the A7S III's"
     site = t + 8 * 7
     assert rows[6] == (3840, 2160, 0x43E) and rows[7] == (3840, 2160, 0x2D9)
-    ref = json.loads((ROOT / "modding/designs/outsz2560_s3_v1.json").read_text(encoding="utf8"))
+    ref = json.loads((ROOT / "modding/designs" / NAME.replace("_fx3_", "_s3_")).with_suffix(".json").read_text(encoding="utf8"))
     img = emu_size_table.Path(ROOT / "work/extracted" / BUILD / "0700_part_image/dev/nflasha8/cpapp-b.bin").read_bytes()
     assert hashlib.sha256(img).hexdigest() == SHA
     out = {"design": NAME, "build": BUILD, "camera": "ILME-FX3 (FX3), firmware 7.02", "kind": "ram_words",
-           "title": "Output size of the stock 4K movie request: 3840 x 2160 -> 3840 x 2560 (size class 3, second entry)",
+           "title": "Output size of the stock 4K movie request: 3840 x 2160 -> %d x %d (size class 3, second entry)" % (W, H),
            "status": "addresses from emulating the FX3's own size-table function; never read or written on an FX3. The same word change "
                      "(outsz2560_s3_v1) works on an A7S III",
            "emulated_image_sha256": SHA,                  # not `artifact_sha256`: the word is RAM the camera fills at run time, not a byte of the file
-           "generated_by": "build/build_ram_words_fx3.py", "ported_from": "outsz2560_s3_v1 (A7S III 5.01, RAM 0x13ec2e4)",
-           "sites": [{"ram_address": hex(site), "old": struct.pack("<HH", 3840, 2160).hex(), "new": struct.pack("<HH", 3840, 2560).hex(),
+           "generated_by": "build/build_ram_words_fx3.py" + ("" if W == 3840 else " --size %d %d" % (W, H)),
+           "ported_from": "%s (A7S III 5.01, RAM 0x13ec2e4)" % NAME.replace("_fx3_", "_s3_"),
+           "sites": [{"ram_address": hex(site), "old": struct.pack("<HH", 3840, 2160).hex(), "new": struct.pack("<HH", W, H).hex(),
                       "what": "size class 3, second entry: width, height"}],
            "guards": [{"ram_address": hex(site - 8), "bytes": struct.pack("<HHI", 3840, 2160, 0x43E).hex(), "what": "size class 3, first entry and the raw write buffer id"},
                       {"ram_address": hex(site + 4), "bytes": struct.pack("<I", 0x2D9).hex(), "what": "the output buffer's memory id"}],
            "precondition": ref["precondition"], "restore": ref["restore"],
            "emulated": {"function": "0x4008ec", "table": hex(t), "entries_equal_a7s3_501": True, "stores_into_block": len(writes)},
            "not_shown": ["anything on an FX3"] + ref["not_shown"]}
+    if W != 3840:
+        out["status"] = ("the word and guards of outsz2560_fx3_v1 (which runs on FX3s) with another size; never run on a camera")
+        out["goes_with"] = ("dmm7slot_fx3_v1 FIRST (a plane of %s bytes at 1.25 bytes per pixel does not fit the stock 13,271,040-byte units of id 0x2d9), ogh2816_fx3_v1 "
+                            "(front end 4240 x 2816; the second scaler takes 4224 x 2816 at scale 1) and ogfile4224_fx3_v1" % f"{W * H * 5 // 4:,}")
+        out["division_job"] = "the FX3's own job 0x43a4f4 accepts 4240 x 2816 -> 4224 x 2816 with two units of 2112 (build/division_sizes_s3.py --build fx3_702); 4240 wide is refused"
     for s, g in ((out["sites"], ref["sites"]), (out["guards"], ref["guards"])):
         assert [(x.get("old"), x.get("new"), x.get("bytes")) for x in s] == [(x.get("old"), x.get("new"), x.get("bytes")) for x in g]
     dst = ROOT / "modding" / "designs" / f"{NAME}.json"

@@ -117,7 +117,20 @@ OTHER_BUILDS = {
     # keeps the height in w5 and the width in w6: `mov w5, #0x870` at 0x1ec2e8 (HEVC) and 0x1ec1b8 (AVC).
     "a6700_200": {"suffix": "_a6700", "comb": 0x27E590, "av_shift": 0xEE1C + 0xF90, "clip": 0x39156C, "clip_8k": 3, "clip_4k": 23,
                   "mp4_imm": {"hs": 0x1EC2E8, "s": 0x1EC1B8}, "mp4_reg": 5},
+    # A1 4.00 (ILCE-1, 2026-11-28, modding/A1_PORT_ENCODER.md): NOT the A1 II's shape. av-cam's unit-type table (0x38fb98), its 689 descriptors of
+    # 0x90 bytes (0x38fc38) and both profile tables (0x3a7fc8, 373 rows; 0x3bf5c8, 316 rows) are the A7 IV's and the A7S III's byte for byte, moved as
+    # one (A7 IV + 0xc2fc, A7S III + 0x22d0); the clip-format table is the A7S III's 0x200 bytes at 0x38ddec (A7S III + 0x2210; codes 3 / 23; row 2 is
+    # the A1's 8K raster 7680x4320, code 4). libmpr g_videoParamComb 0x2cd5b0 (the A7 IV's / A7S III's / A1 II's 768 bytes, once); the MP4 writer is
+    # the A7 IV's moved by -0x3f3c (track config 0x21ebdc; A7S III - 0x5070): `mov w6, #0x870` at 0x21eca0 (HEVC) and 0x21ec54 (AVC). Row 3's ids
+    # 0x473 / 0x476 / 0x479 have memory on the A1 (it records 8K) and its CD id is 0; the memory function 0x219338 is the A7 IV's whole body.
+    "a1_400": {"suffix": "_a1", "comb": 0x2CD5B0, "av_shift": 0xC2FC, "clip": 0x38DDEC, "clip_8k": 3, "clip_4k": 23,
+               "mp4_imm": {"hs": 0x21ECA0, "s": 0x21EC54}},
 }
+# the A1's words for the unit-type site (every other build keeps its text, below, as it was)
+A1_UNIT_NOTE = ("unit-type table row 3 (above 8,847,360 pixels; the A1's 8K class: CD id 0, LD 0x473, multi buffer 0x476, ES 0x479, which DO have memory "
+                "on the A1 but give no CD frame buffer, and whose ES block is the alternative of the 4K LD / multi blocks in one 304.7 MB block, so a "
+                "single-core 4K channel cannot take them) := row 2 (the 4K class: frame buffer CD 0x486, LD 0x474, multi buffer 0x477, ES buffer "
+                "0x47a). While applied, 8K recordings get the 4K blocks too: do not record 8K")
 MP4_REG = 6                              # the register the track config holds the height in (A6700: w5)
 DSIZE, DTAIL = 0x90, 0                   # descriptor size; how much lower the fields from +0x5c on sit (ZV-E1: 8)
 
@@ -191,6 +204,7 @@ def build(fam, lm, av, level6):
     rows = [struct.unpack_from("<4I", av, UNIT_TABLE + 0x10 * k) for k in range(5)]
     assert rows[2] == (0x486, 0x474, 0x477, 0x47A) and rows[3] == (0, 0x473, 0x476, 0x479) and rows[4] == rows[2], rows
     d.add("av-cam.bin", av, "A0-unit", UNIT_TABLE + 0x30, struct.pack("<4I", *rows[2]),
+          A1_UNIT_NOTE if BUILD == "a1_400" else
           ("unit-type table row 3 (above 8,847,360 pixels; ids 0, 0x473, 0x476, 0x479, none of which has memory on this camera) := row 2 "
            "(the 4K class: frame buffer CD 0x486, LD 0x474, multi buffer 0x477, ES buffer 0x47a)") if BUILD != "a1m2_400" else
           ("unit-type table row 3 (above 8,847,360 pixels; the A1 II's 8K class: no CD (id 0, skipped by its memory function 0x22c9e8), LD 0x473, "
@@ -291,7 +305,8 @@ def main():
         # 2026-11-26: and the FX30 6.01 (ogfile2560_hs_s_fx30_v2): its writer is the FX3's, 0x2c higher (track config 0x21fef0).
         # 2026-11-26: and the A1 II 4.00 (ogfile2560_hs_s_a1m2_v2): the A7 IV's writer moved by +0x15c4 (mp4_meta_sites.SHIFTED).
         # 2026-11-26: and the A6700 2.00 (ogfile2560_hs_s_a6700_v2): its writer is another compile (track config 0x1ec14c, height in w5).
-        assert not level6 and SUFFIX in ("", "_fx3", "_fx2", "_c2", "_fx30", "_a1m2", "_a6700"), "--meta: the A7 IV, FX3, FX2, A7C II, FX30, A1 II and A6700 3840x2560 union designs only"
+        # 2026-11-28: and the A1 4.00 (ogfile2560_hs_s_a1_v2): the A7 IV's writer moved by -0x3f3c (mp4_meta_sites.SHIFTED).
+        assert not level6 and SUFFIX in ("", "_fx3", "_fx2", "_c2", "_fx30", "_a1m2", "_a6700", "_a1"), "--meta: the A7 IV, FX3, FX2, A7C II, FX30, A1 II and A6700 3840x2560 union designs only"
         import mp4_meta_sites
         fam, fmt, du, picked_u = built[-1]
         dm = Design(f"ogfile2560_hs_s{SUFFIX}_v{3 if RATE30 else 2}", du.title + "; the MP4 headers (tkhd, stsd, Sony's PROF) say 3840x2560")
@@ -307,7 +322,7 @@ def main():
                                                     "(NonRealTimeMeta) is unchanged: its size keys the videoCodec name lookup" % {"a7iv_602": "0x222b18", "fx3_702": "0x21fec4",
                                                                                                     "fx2_101": "0x21f364", "a7c2_201": "0x21f20c",
                                                                                                     "fx30_601": "0x21fef0", "a1m2_400": "0x2240dc",
-                                                                                                    "a6700_200": "0x1ec14c"}[BUILD],
+                                                                                                    "a6700_200": "0x1ec14c", "a1_400": "0x21ebdc"}[BUILD],
                                             "sites": [{"file_off": hex(a), "stock": f"{w[0]} {w[1]}", "note": why} for a, _, w, why in meta],
                                             "checked": {"a7iv_602": "build/emu_mp4_meta.py -> evidence/pipeline/mp4_meta_emu.json",
                                                         "fx3_702": "build/emu_mp4_meta.py --build fx3_702 -> evidence/fx3/mp4_meta_emu_fx3.json",
@@ -315,7 +330,8 @@ def main():
                                                         "a7c2_201": "build/emu_mp4_meta.py --build a7c2_201 -> evidence/a7c2/mp4_meta_emu_c2.json",
                                                         "fx30_601": "build/emu_mp4_meta.py --build fx30_601 -> evidence/fx30/encoder/mp4_meta_emu_fx30.json",
                                                         "a1m2_400": "build/emu_mp4_meta.py --build a1m2_400 -> evidence/a1m2/encoder/mp4_meta_emu_a1m2.json",
-                                                        "a6700_200": "build/emu_mp4_meta.py --build a6700_200 -> evidence/a6700/encoder/mp4_meta_emu_a6700.json"}[BUILD]}}
+                                                        "a6700_200": "build/emu_mp4_meta.py --build a6700_200 -> evidence/a6700/encoder/mp4_meta_emu_a6700.json",
+                                                        "a1_400": "build/emu_mp4_meta.py --build a1_400 -> evidence/a1/encoder/mp4_meta_emu_a1.json"}[BUILD]}}
         built.append(("hs_s", fmt, dm, picked_u))
     if RATE30:                                       # only the union design with the header heights: the v1 / v2 files keep their 24p/25p content
         assert "--meta" in sys.argv and SUFFIX == "_fx3" and not level6, "--rate30: the FX3 union design with --meta only"

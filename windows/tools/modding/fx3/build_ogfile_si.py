@@ -114,6 +114,29 @@ SIZES_BY_BUILD["a6700_200"] = {"ogfilesi2560_a6700_v1": {"raster": (3840, 2560),
                                                                       "size in coprocessor RAM; ogfile2560_hs_s_a6700_v2 or _v1 on the main processor), "
                                                                       "applied as one more level 19 step (I19) after it",
                                                          "after": "ogfile2560_hs_s_a6700_v2"}}
+# FX2 1.01 (2026-11-27, GitHub issue 7: "with the patch applied, REC stops at once" in XAVC S-I; the owner: parity with the A7 IV's modes): both
+# designs. Tables as build_ogfile.OTHER_BUILDS["fx2_101"] (691 descriptors); m_vpcSt found by content (the A7 IV's first 8 rows at 0x2e3898, once),
+# the same one build_og57.ELST_BUILDS["fx2_101"] names. The FX2's matcher 0x2360ac is checked in build/run_ogfile_emu_fx2.py (first_match() below
+# is the A7 IV's scan from index 3; the emulation answers for the FX2's own code).
+VPCS["fx2_101"] = 0x2E3898
+SIZES_BY_BUILD["fx2_101"] = {
+    "ogfilesi2560_fx2_v1": {"raster": (3840, 2560), "shape": "ogfile2560_hs_s_fx2_v2",
+                            "goes_with": "the FX2 kit's 3840x2560 open-gate state (dmmwb4688_fx2_v1, ogh2560_fx2_v1 or ogh2560880_fx2_v1, outsz2560_fx2_v1 in "
+                                         "coprocessor RAM; ogfile2560_hs_s_fx2_v2 or _v1 on the main processor), applied as one more level 19 step after it",
+                            "after": "ogfile2560_hs_s_fx2_v2"},
+    "ogfilesi57_fx2_v1": {"raster": (5760, 3840), "shape": "ogfile57_v1",
+                          "goes_with": "the FX2 kit's real 5760x3840 open-gate state (dmmwb4688_fx2_v1, og57n_fx2_v1 or og57n880_fx2_v1, og57cp_fx2_v3 in "
+                                       "coprocessor RAM; ogfile57r300m1_fx2_v4 or _v3 on the main processor), applied as one more level 19 step after it",
+                          "after": "ogfile57r300m1_fx2_v4"}}
+# A1 4.00 (ILCE-1, 2026-11-28, modding/A1_PORT_ENCODER.md): the 3840x2560 design only. Tables as build_ogfile.OTHER_BUILDS["a1_400"] (the A7 IV's
+# and A7S III's 689 descriptors and profiles byte for byte); m_vpcSt found by content (the A7 IV's and the A1 II's 14 rows at 0x2e32d8, once).
+# The A1's matcher 0x2213f4 is the A7 IV's whole body (build/avcam_fnport.py), so first_match() is its scan.
+VPCS["a1_400"] = 0x2E32D8
+SIZES_BY_BUILD["a1_400"] = {"ogfilesi2560_a1_v1": {"raster": (3840, 2560), "shape": "ogfile2560_hs_s_a1_v1",
+                                                   "goes_with": "the A1 kit's 3840x2560 open-gate state (its sensor, output size and raw-buffer steps "
+                                                                "in coprocessor RAM; ogfile2560_hs_s_a1_v2 or _v1 on the main processor), applied as "
+                                                                "one more level 19 step after it",
+                                                   "after": "ogfile2560_hs_s_a1_v2"}}
 WHY = ("the owner asked for a test script that applies the same open gate (3840x2560 and 5760x3840) to XAVC S-I 4K (2026-11-25); this is its "
        "encoder side")
 
@@ -311,6 +334,23 @@ def main():
             out["while_applied"][3] = ("the MP4 headers say what the kit's encoder step makes them say for AVC 3840-wide formats (%dx%d with "
                                        "ogfile2560_hs_s_a1m2_v2; 3840x2160 with its v1); Sony's XML says 3840x2160" % (W1, H1))
             out["status"] = "built from the A1 II 4.00 files and emulated on its own code (build/run_ogfile_emu_a1m2.py); never run on an A1 II"
+        elif BUILD == "a1_400":                           # the A1's words (2026-11-28)
+            out = {**{"build": BUILD, "camera": "ILCE-1 (A1), firmware 4.00"}, **out}
+            out["level"] = "the stock level bytes are kept (51, Level 5.1), as the A1's ogfile2560_hs_s_a1_v1 / v2 keep XAVC S 4K's"
+            out["memory"]["unit_type"] = ("4 (intra above 8,847,360 pixels; the A1's memory function 0x219338 is the A7 IV's 0x2136c4 whole, emulated in "
+                                          "build/run_ogfile_emu_a1.py)")
+            out["while_applied"][3] = ("the MP4 headers say what the kit's encoder step makes them say for AVC 3840-wide formats (%dx%d with "
+                                       "ogfile2560_hs_s_a1_v2; 3840x2160 with its v1); Sony's XML says 3840x2160" % (W1, H1))
+            out["status"] = "built from the A1 4.00 files and emulated on its own code (build/run_ogfile_emu_a1.py); never run on an A1"
+        elif BUILD == "fx2_101":                          # the FX2's words (2026-11-27)
+            out = {**{"build": BUILD, "camera": "ILME-FX2 (FX2), firmware 1.01"}, **out}
+            if W1 == W0:
+                out["level"] = "the stock level bytes are kept (51, Level 5.1), as the FX2's ogfile2560_hs_s_fx2_v1 / v2 keep XAVC S 4K's"
+            out["memory"]["unit_type"] = ("4 (intra above 8,847,360 pixels; the FX2's memory function 0x22dfa4 is the A7 IV's 0x2136c4, emulated in "
+                                          "build/run_ogfile_emu_fx2.py)")
+            out["while_applied"][3] = ("the MP4 headers say what the kit's encoder step makes them say for AVC 3840-wide formats (%dx%d with %s; "
+                                       "3840x2160 with its --no-meta form); Sony's XML says 3840x2160" % (W1, H1, cfg["after"]))
+            out["status"] = "built from the FX2 1.01 files and emulated on its own code (build/run_ogfile_emu_fx2.py); never run on an FX2"
         elif BUILD == "a6700_200":                        # the A6700's words (2026-11-26)
             out = {**{"build": BUILD, "camera": "ILCE-6700 (A6700), firmware 2.00"}, **out}
             out["level"] = "the stock level bytes are kept (51, Level 5.1), as the A6700's ogfile2560_hs_s_a6700_v1 / v2 keep XAVC S 4K's"

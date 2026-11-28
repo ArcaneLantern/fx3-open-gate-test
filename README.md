@@ -4,6 +4,13 @@
 
 **Where it stands (2026-11-26):**
 
+- **New (2026-11-28), NOT RUN ON A CAMERA YET: a 4224 × 2816 state, the sensor pixel for pixel.** The sensor gives 4240 × 2832. The default state squeezes those rows into 2,392 and makes a 3840 × 2560 file from them. The new state keeps the pixels: the file is the central **4224 × 2816** of the sensor at scale 1 (8 columns and 8 rows are left out at each edge), in XAVC HS 4K and XAVC S 4K at 24p and at 30p (NTSC) / 25p (PAL). It is the A7S III kit's new state at the FX3's addresses; it has not run on either camera.
+  - **Why not 4240 × 2832:** the second scaler works in two units and each needs a width that is a multiple of 32. The FX3's own planning code refuses a 4240-wide picture with one, two and four units; 4224 is the widest it takes. With 2,832 rows the picture could not be cut at scale exactly 1; with 2,816 it can.
+  - **What is new in it:** the output planes grow (step `D16`, the memory step that runs on the FX6), the first scaler passes the picture one to one (`H5`), the output size is 4224 × 2816 (`K16`), and the encoder runs it on both of its cores with Level 6 (`K19`). The sensor's own settings are those of step `L5`.
+  - **Two ways to test, smallest first:** `open_gate_test_real_rows` applies the new sensor step with the proven 3840 × 2560 output and encoder steps: a 3840 × 2560 file as before, made from 4224 × 2816 real pixels. `open_gate_apply_4224x2816` is the whole state; `..._300mbps` records the 100M settings at 300 Mbps (V60 / V90 or CFexpress card); `..._no_meta` leaves the MP4 headers at 3840 × 2160.
+  - **There is no XAVC S-I step in the 4224 × 2816 state:** do not record XAVC S-I 4K while it is applied. Do not play clips back on the camera, as in the default state.
+  - **What to send back:** whether it records and stops by itself, the clip or MediaInfo's text, the live view, and `camera_private`. If some frames show a band of wrong rows (about 300, top or bottom), say so, and say whether going to a still mode and back to Movie clears it.
+  - The three states share memory sites. Put one back, or pull the battery for 10 seconds, before applying another; a step that meets another state's bytes writes nothing and says so.
 - **New in this version: open gate at 25p and 30p too.** The same apply now also covers 29.97p (NTSC) and 25p (PAL), in XAVC HS 4K, XAVC S 4K and XAVC S-I 4K, so you can change the frame rate in the menu without a new apply. 25p is a tester's design that recorded open gate on his FX3 in PAL (`FX3-PAL25-MODE-0x820-REPORT-2026-11-25.md`); 29.97p is the same design at 30p and has **not run yet**. The sensor step now also works on a camera set to PAL (the previous one refused it). `open_gate_apply_only_24p.cmd` gives the previous, 24p-only sensor step (NTSC only).
 - **50p, 60p, 100p and 120p cannot be open gate.** The sensor's only full-height read-out takes about 26 ms a frame (Sony's own fastest full-height mode runs at 36.7 fps), so 30p is the highest rate it serves. The fast 4K modes read only the 16:9 band, and that window is fixed inside the sensor. While the kit is applied those rates refuse to record.
 - **The file is right.** Recorded in XAVC HS 4K (HEVC) and XAVC S 4K (AVC) at 23.98p: a true 3840 × 2560 picture. Against a full-sensor photo it covers 99.7–99.99% of the width and height (a second tester's measurement, `FX3-UPSTREAM-TEST-REPORT-2026-11-24.md`).
@@ -38,6 +45,11 @@
 | `open_gate_apply_no_si.cmd` | The default state without the XAVC S-I 4K step (XAVC HS 4K and XAVC S 4K only, as the first version) | **Yes: memory only** |
 | `open_gate_apply_no_meta.cmd` | The default state with the first version's encoder step: the MP4 headers keep saying 3840 × 2160 | **Yes: memory only** |
 | `open_gate_putback.cmd` | Puts the five steps back | Yes: memory only |
+| `open_gate_test_real_rows.cmd` | **New, not run.** The new sensor step (`H5`) with the default output size, encoder, screen and S-I steps: a 3840 × 2560 file from 4224 × 2816 real pixels | **Yes: memory only** |
+| `open_gate_apply_4224x2816.cmd` | **New, not run.** The 4224 × 2816 state in five steps: output planes, sensor side, output size, encoder side (MP4 headers 4224 × 2816), the screen step. No XAVC S-I | **Yes: memory only** |
+| `open_gate_apply_4224x2816_300mbps.cmd` | The same with the 100M record settings at 300 Mbps (`R19`) | **Yes: memory only** |
+| `open_gate_apply_4224x2816_no_meta.cmd` | The same as the second, MP4 headers left at 3840 × 2160 (`J19`) | **Yes: memory only** |
+| `open_gate_putback_4224x2816.cmd`, `..._300mbps.cmd`, `open_gate_test_real_rows_putback.cmd` | Put the matching state back | Yes: memory only |
 | `screen_putback.cmd` | Puts the screen step back | Yes: memory only |
 | `playback_fix_apply.cmd` | **Optional, not run on any camera.** In-camera playback of the 3840 × 2560 clips, the A7 IV's way (see "The playback step") | **Yes: memory only** |
 | `playback_fix_putback.cmd` | Puts the playback step back | Yes: memory only |
@@ -84,6 +96,8 @@ If macOS refuses to open a .command file ("unidentified developer" or "could not
 **Playback fix (untested)** and **Playback put back** run the playback step and its put back (app 0.3). Like the apply, they start only after a check on this phone said READY.
 
 **Self-test** and **Dry run** need no camera and send nothing.
+
+**App 0.7 (2026-11-28):** a list under the boxes chooses the state that **2. Apply to camera**, **Put back** and **Dry run** work on: 3840 × 2560 (the default), 4224 × 2816, 4224 × 2816 at 300 Mbps, or the real-rows test. The three new ones have not run on a camera. Use **Put back** with the same choice the apply was made with. The S-I box and the 24p-only box do nothing in the two 4224 × 2816 choices.
 
 ## The read-only steps
 

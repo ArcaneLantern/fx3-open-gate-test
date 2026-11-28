@@ -327,3 +327,28 @@ Library pins (2026-11-26): check `6f99aef2`, dump `fdb83bfe` (`fx3read_v2`), L5 
 - That the menu's 1.3x / 1.5x / 1.6x / 2.0x send the codes 1 / 2 / 3 / 4. This is inferred from the ratios; appFw's mapping was not read.
 - What the FX3's HDMI output shows in the open-gate state, with or without de-squeeze. HDMI is not part of this kit.
 - The scaler-state addresses the dump reads were ported by code reference. The second scaler's block and input words are only predicted, as they were on the A7S III.
+
+## The 4224 × 2816 state (2026-11-28): built and emulated, not run on a camera
+
+The A7S III kit's new state (its PORT_NOTES has the reasoning) at the FX3's addresses. Every part was run again on the FX3's own code.
+
+**The size.** The FX3's division job (`cpapp-b.bin` `0x43a4f4`; the A7S III's `0x444a74` relinked) gives the A7S III's answers: two-unit output widths in multiples of 64 only; 4240 refused with one, two and four units; 4240 × 2816 → 4224 × 2816 accepted with two units of 2112.
+
+**The steps.**
+
+| Step | Design | What it changes |
+|---|---|---|
+| `D16` / `D17` | `dmm7slot_fx3_v1` | ten words of the run-time copy of `DmmCfg.bin` (unit records from `0x1f7f90c`): seven planes of the 4K layout `0x2a` 13,271,040 → 14,942,208 bytes, the eighth out of the pool, the HD layout `0x28`'s one 4K plane enlarged too. The FX3 fills a plane at 1.25 bytes per pixel (its 3840 × 2560 files record in the stock planes): 4224 × 2816 needs 14,868,480 |
+| `H5` / `H6` | `ogh2816_fx3_v1` | step `L5`'s 38 sensor cells (0x8c0 and 0x820), unchanged; the two picture records `0xbb31d8` / `0xbb3d90` with a first stage of 2,832 rows from active row 8 and the first scaler at step 4096 both ways (front end 4240 × 2816); the four stored records (two modes, NTSC and PAL) with the ratio 27/32 |
+| `K16` / `K17` | `outsz4224_fx3_v1` | the output-size word `0x13c31c8`: 3840 × 2160 → 4224 × 2816 |
+| `K19` / `K20` | `ogfile4224_fx3_v1` | 43 descriptors (XAVC HS 4K and XAVC S 4K at 23.98p, 25p, 29.97p): both encoder cores, rows for the first core 1,408, Level 6, the 4K memory blocks in the order CD `0x477`, LD `0x486`, multi `0x474`, ES `0x47a`; nine `libmpr.so` instructions so that `tkhd`, `stsd` and `PROF` say 4224 × 2816 |
+| `J19` | `ogfile4224nm_fx3_v1` | the same without the nine header instructions (`K20` puts it back) |
+| `R19` / `R20` | `ogfile4224r300_fx3_v1` | as `K19`, and the profiles of the 100M settings hold Sony's own 300 / 340 Mbps figures and Level 6.1 |
+
+**Checked offline.**
+- Records: the FX3's stock pair with the bytes the A7S III design changes; the generator's own path on the FX3 image with the FX3's packers gives the same two records byte for byte; no rule of the stock split pairs is broken; the resize calculation gives `4240 2816 8 0 4224 2816 0 0 0 0`.
+- Memory: the FX3's own allocator (its copy of the table equals the file after its own set-up): one refused request after a full release, then 14 planes of 14,942,208; never a plane of the old size.
+- Encoder: 30 checks in the FX3's own `av-cam.bin` and `libmpr.so` (its own start-block builder among them): all 43 descriptors answer a 4224 × 2816 request and no other request changes its answer; codec need 47.6 MB of reference pictures and 13.9 MB of work space; MP4 track config, `stsd` and `PROF` built at 4224 × 2816 for every request the stock writer accepts.
+- Libraries: 71 cases on a model camera, NTSC and PAL (apply, apply again, put back, guards, lost writes, records of mixed systems, each library on a camera holding the 3840 × 2560 state and the other way round: nothing written). The seventeen earlier libraries rebuild to their pins.
+
+**Not known before a camera says.** The A7S III list, and on the FX3: the XAVC S-I step is not part of this state (its encoder request stays 3840 × 2160 while the pipeline gives 4224 × 2816); in-camera playback is not expected to work (the playback step was made for 3840 × 2560 and has not run either).
